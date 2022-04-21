@@ -65,6 +65,7 @@ from app import (
     URL,
 )
 from PostProcess.supportFunctions.loadSample import associateSample
+from PostProcess.generate_img_radar_chart import compute_radar_chart
 from PostProcess import CFDGraph, query_manager
 
 from dash.exceptions import PreventUpdate
@@ -3837,10 +3838,19 @@ def update_images_tabs(
         ),
     )
     # TODO: do not call python script, rather define functions
-    cmd = f"python {app_main_directory}/PostProcess/generate_img_radar_chart.py {guide} {job_directory}/.guide_dict_{guide}_{filter_criterion}.json {job_directory}/.motif_dict_{guide}_{filter_criterion}.json {mm} {bulge} TOTAL_{filter_criterion} {job_directory}/imgs/"
-    code = subprocess.call(cmd, shell=True)
-    if code != 0:
-        raise ValueError(f'An error occurred while running "{cmd}"')
+    compute_radar_chart(
+        guide, 
+        os.path.join(
+            job_directory, f".guide_dict_{guide}_{filter_criterion}.json"
+        ),
+        os.path.join(
+            job_directory, f".motif_dict_{guide}_{filter_criterion}.json"
+        ),
+        mm,
+        bulge,
+        f"TOTAL_{filter_criterion}",
+        os.path.join(job_directory, IMGS_DIR)
+    )
     img_found = False  # look for radar chart image
     try:
         radar_src_encode_gencode = "data:image/png;base64,{}".format(

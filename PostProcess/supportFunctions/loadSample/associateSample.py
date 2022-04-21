@@ -54,6 +54,7 @@ def loadSampleAssociation(id_sample_file):
         if len(line) < 3:
             print('Warning! The input file is not correctly formatted. Please provide a .txt with a column with SAMPLE_ID, POPULATION_ID, SUPERPOPULATION_ID, GENDER (Optional)')
             print('Exit...')
+            raise Exception
             sys.exit()
             return None, None, None, None, None, None, None, None
         #Add info of first line
