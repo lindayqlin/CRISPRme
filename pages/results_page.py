@@ -2067,7 +2067,7 @@ def update_table_subset(
     return [data_to_send, columns_result]
 
 
-def guidePagev3(job_id, hash):
+def guide_page(job_id, hash):
     guide = hash[: hash.find("new")]
     mms = hash[-1:]
     bulge_s = hash[-2:-1]

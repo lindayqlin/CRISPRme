@@ -11,7 +11,18 @@ import os
 import concurrent.futures  # For workers and queue
 
 
-URL = ""  # base empty URL address
+# base empty URL address
+URL = ""  
+# CRISPRme directories
+CRISPRme_DIRS = [
+    "Genomes", 
+    "Results", 
+    "Dictionaries", 
+    "VCFs", 
+    "Annotations", 
+    "PAMs", 
+    "samplesIDs"
+]
 # CSS style sheets
 external_stylesheets = [
     "https://codepen.io/chriddyp/pen/bWLwgP.css", dbc.themes.BOOTSTRAP
