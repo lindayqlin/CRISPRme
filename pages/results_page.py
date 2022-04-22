@@ -3837,7 +3837,6 @@ def update_images_tabs(
             f"{bulge}_TOTAL_{filter_criterion}.ENCODE+GENCODE.png"
         ),
     )
-    # TODO: do not call python script, rather define functions
     compute_radar_chart(
         guide, 
         os.path.join(
@@ -4046,12 +4045,31 @@ def generate_sample_card(
         raise ValueError(f'An error occurred while running "{cmd}"')
     # plot images in personal card tab
     # TODO: avoid calling scripts, use functions instead
-    os.system(
-        f"python {app_main_directory}/PostProcess/CRISPRme_plots_personal.py {integrated_personal} {current_working_directory}/Results/{job_id}/imgs/ {guide}.{sample}.personal > /dev/null 2>&1"
+    # can't do --> matplotlib savefig bug?
+    cmd = str(
+        f"python {app_main_directory}/PostProcess/CRISPRme_plots_personal.py "
+        f"{integrated_personal} "
+        f"{current_working_directory}/Results/{job_id}/imgs/ "
+        f"{guide}.{sample}.personal > /dev/null 2>&1"
     )
-    os.system(
-        f"python {app_main_directory}/PostProcess/CRISPRme_plots_personal.py {integrated_private} {current_working_directory}/Results/{job_id}/imgs/ {guide}.{sample}.private > /dev/null 2>&1"
+    code = subprocess.call(cmd, shell=True)
+    if code != 0:
+        raise ValueError(f"An error occurred while running {cmd}")
+    cmd = str(
+        f"python {app_main_directory}/PostProcess/CRISPRme_plots_personal.py "
+        f"{integrated_private} "
+        f"{current_working_directory}/Results/{job_id}/imgs/ "
+        f"{guide}.{sample}.private > /dev/null 2>&1"
     )
+    code = subprocess.call(cmd, shell=True)
+    if code != 0:
+        raise ValueError(f"An error occurred while running {cmd}")
+    # os.system(
+    #     f"python {app_main_directory}/PostProcess/CRISPRme_plots_personal.py {integrated_personal} {current_working_directory}/Results/{job_id}/imgs/ {guide}.{sample}.personal > /dev/null 2>&1"
+    # )
+    # os.system(
+    #     f"python {app_main_directory}/PostProcess/CRISPRme_plots_personal.py {integrated_private} {current_working_directory}/Results/{job_id}/imgs/ {guide}.{sample}.private > /dev/null 2>&1"
+    # )
     cmd = f"rm -rf {integrated_personal}"
     code = subprocess.call(cmd, shell=True)
     if code != 0:
