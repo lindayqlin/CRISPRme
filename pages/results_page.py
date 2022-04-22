@@ -743,7 +743,7 @@ def download_general_table(
     [Input("interval-integrated-results", "n_intervals")],
     [State("div-info-integrated-results", "children"), State("url", "search")],
 )
-def download_general_table(
+def download_integrated_results(
     n: int, file_to_load: str, search: str
 ) -> Tuple[str, bool]:  # file to load =
     """Create the link to download CRISPRme integrated result table.
@@ -1917,48 +1917,6 @@ def sample_page(job_id: str, hash_term: str) -> html.Div:
     return html.Div(final_list, style={"margin": "1%"})
 
 
-# TODO: move auxiliary functions close to each other in this file
-
-
-@cache.memoize()
-def global_store_general(path_file_to_load: str) -> pd.DataFrame:
-    """Cache target files to improve results visualization and get better
-    performances.
-
-    ...
-
-    Parameters
-    ----------
-    path_file_to_load : str
-        Path to file to cache
-
-    Returns
-    -------
-    pandas.DataFrame
-        Results table
-    """
-
-    if not isinstance(path_file_to_load, str):
-        raise TypeError(
-            f"Expected {str.__name__}, got {type(path_file_to_load).__name__}"
-        )
-    if path_file_to_load is not None and not os.path.isfile(path_file_to_load):
-        raise FileNotFoundError(f"Unable to locate {path_file_to_load}")
-    if path_file_to_load is None:
-        return ""  # do not cache anything
-    if "scomposition" in path_file_to_load:
-        rows_to_skip = 1
-    else:
-        rows_to_skip = 1  # Skip header
-    # make sure file to cache is not empty
-    if os.path.getsize(path_file_to_load) > 0:
-        # TSV format -> sep="\t"
-        df = pd.read_csv(path_file_to_load, sep="\t", index_col=False, na_filter=False)
-    else:
-        df = None  # empty file, no need for caching
-    return df
-
-
 # -------------------------------------------------------------------------------
 # Summary by Mismatches/Bulges tab
 #
@@ -2293,171 +2251,7 @@ def guidePagev3(job_id, hash):
     return html.Div(final_list, style={"margin": "1%"})
 
 
-# TODO: move auxiliary functions close to each other
-# @cache.memoize()
-def global_store_subset_no_ref(
-    job_id: str, bulge_t: str, bulge_s: str, mms: str, guide: str, page: int
-) -> pd.DataFrame:
-    """Cache targets files to improve visualization performance.
-
-    ...
-
-    Parameters
-    ----------
-    job_id : str
-        Unique job identifier
-    bulge_t : str
-        Bulge type
-    bulge_s : str
-    mms : str
-        Mismatches
-    guide : str
-        Guide
-    page : int
-        Current page
-
-    Returns
-    -------
-    pd.DataFrame
-        Results table
-    """
-
-    if not isinstance(job_id, str):
-        raise TypeError(f"Expected {str.__name__}, got {type(job_id).__name__}")
-    if not isinstance(bulge_t, str):
-        raise TypeError(f"Expected {str.__name__}, got {type(bulge_t).__name__}")
-    if not isinstance(bulge_s, str):
-        raise TypeError(f"Expected {str.__name__}, got {type(bulge_s).__name__}")
-    if not isinstance(mms, str):
-        raise TypeError(f"Expected {str.__name__}, got {type(mms).__name__}")
-    if not isinstance(guide, str):
-        raise TypeError(f"Expected {str.__name__}, got {type(guide).__name__}")
-    if not isinstance(page, int):
-        raise TypeError(f"Expected {int.__name__}, got {type(page).__name__}")
-    if job_id is None:
-        return ""  # do not do anything
-    # recover path to db file
-    db_path = glob(
-        os.path.join(current_working_directory, RESULTS_DIR, job_id, ".*.db")
-    )[
-        0
-    ]  # take the first element
-    assert isinstance(db_path, str)
-    # initialize db
-    conn = sqlite3.connect(db_path)
-    c = conn.cursor()
-    # recover the filtering criterion from drop-down bar
-    filter_criterion = read_json(job_id)
-    if filter_criterion not in FILTERING_CRITERIA:
-        raise ValueError(f"Forbidden filtering criterion ({filter_criterion})")
-    query_cols = get_query_column(filter_criterion)
-    # perform query on db
-    result = pd.read_sql_query(
-        'SELECT * FROM final_table WHERE "{}"=\'{}\' AND "{}"=\'{}\' AND "{}"={} AND "{}"={} AND "{}"<>\'NA\' LIMIT {} OFFSET {}'.format(
-            GUIDE_COLUMN,
-            guide,
-            query_cols["bul_type"],
-            bulge_t,
-            query_cols["bul"],
-            bulge_s,
-            query_cols["mm"],
-            mms,
-            query_cols["samples"],
-            PAGE_SIZE,
-            page * PAGE_SIZE,
-        ),
-        conn,
-    )
-    return result
-
-
-# TODO: move auxiliary functions close to each other
-# @cache.memoize()
-def global_store_subset(
-    job_id: str, bulge_t: str, bulge_s: str, mms: str, guide: str, page: int
-) -> pd.DataFrame:
-    """Cache targets files to improve visualization performance.
-
-    ...
-
-    Parameters
-    ----------
-    job_id : str
-        Unique job identifier
-    bulge_t : str
-        Bulge type
-    bulge_s : str
-    mms : str
-        Mismatches
-    guide : str
-        Guide
-    page : int
-        Current page
-
-    Returns
-    -------
-    pd.DataFrame
-        Res
-    """
-
-    if not isinstance(job_id, str):
-        raise TypeError(f"Expected {str.__name__}, got {type(job_id).__name__}")
-    if not isinstance(bulge_t, str):
-        raise TypeError(f"Expected {str.__name__}, got {type(bulge_t).__name__}")
-    if not isinstance(bulge_s, str):
-        raise TypeError(f"Expected {str.__name__}, got {type(bulge_s).__name__}")
-    if not isinstance(mms, str):
-        raise TypeError(f"Expected {str.__name__}, got {type(mms).__name__}")
-    if not isinstance(guide, str):
-        raise TypeError(f"Expected {str.__name__}, got {type(guide).__name__}")
-    if not isinstance(page, int):
-        raise TypeError(f"Expected {int.__name__}, got {type(page).__name__}")
-    if job_id is None:
-        return ""  # do not do anything
-    # recover path to db
-    db_path = glob(
-        os.path.join(current_working_directory, RESULTS_DIR, job_id, ".*.db")
-    )[0]
-    assert isinstance(db_path, str)
-    # initialize db
-    conn = sqlite3.connect(db_path)
-    c = conn.cursor()
-    # recover filtering criterion from drop-down bar
-    filter_criterion = read_json(job_id)
-    if not filter_criterion in FILTERING_CRITERIA:
-        raise ValueError(f"Forbidden filtering criterion ({filter_criterion})")
-    query_cols = get_query_column(filter_criterion)
-    # perform query on db
-    result = pd.read_sql_query(
-        'SELECT * FROM final_table WHERE "{}"=\'{}\' AND "{}"=\'{}\' AND "{}"={} AND "{}"={} LIMIT {} OFFSET {}'.format(
-            GUIDE_COLUMN,
-            guide,
-            query_cols["bul_type"],
-            bulge_t,
-            query_cols["bul"],
-            bulge_s,
-            query_cols["mm"],
-            mms,
-            PAGE_SIZE,
-            page * PAGE_SIZE,
-        ),
-        conn,
-    )
-    # add mismatches and bulges
-    targets_with_mm_bul = os.path.join(
-        current_working_directory,
-        RESULTS_DIR,
-        job_id,
-        f"{job_id}.{bulge_t}.{mms}.{bulge_s}.{guide}.targets.tsv",
-    )
-    # store query results in TSV file
-    result.to_csv(targets_with_mm_bul, sep="\t", na_rep="NA", index=False)
-    return result
-
-
 # Load barplot of population distribution for selected guide
-
-
 @app.callback(
     Output("content-collapse-population", "children"),
     [Input("general-profile-table", "selected_cells")],
@@ -2748,7 +2542,7 @@ def update_table_general_profile(
         current_working_directory,
         RESULTS_DIR,
         job_id,
-        "".join([".", job_id, ".acfd_", filter_criterion, ".txt"]),
+        f".{job_id}.acfd_{filter_criterion}.txt",
     )
     if not os.path.isfile(acfd_file):
         raise FileNotFoundError(f"Unable to locate {acfd_file}")
@@ -2798,21 +2592,16 @@ def update_table_general_profile(
             sep="\t",
             na_filter=False,
         )
-        data_guides = {}
-        data_guides["Guide"] = g
-        data_guides["Nuclease"] = nuclease
+        data_guides = {"Guide": g, "Nuclease": nuclease}
         data_general_count_copy = data_general_count.copy()
-        count_bulges = []
-        origin_ref = []
-        origin_var = []
-        for the_bulge in range(max_bulges + 1):
-            origin_ref.append("REF")
-            origin_var.append("VAR")
-            count_bulges.append(the_bulge)
+        count_bulges = [blg for blg in range(max_bulges + 1)]
+        origin_ref = ["REF" for _ in range(max_bulges + 1)]
+        origin_var = ["VAR" for _ in range(max_bulges + 1)]
         count_bulges_concat = count_bulges + count_bulges
+        # merge genome of origin list
         origin_concat = origin_ref + origin_var
-        data_general_count_copy.insert(0, "Genome", origin_concat, True)
-        data_general_count_copy.insert(1, "Bulges", count_bulges_concat, True)
+        data_general_count_copy["Genome"] = origin_concat
+        data_general_count_copy["Bulges"] = count_bulges_concat
         if "NO SCORES" not in all_scores:
             data_guides["CFD"] = acfd[i]
             table_to_file.append(f"CFD: {acfd[i]}")  # append CFD to table
@@ -2824,7 +2613,7 @@ def update_table_general_profile(
                 data_guides["Doench 2016"] = doench[i]
         if genome_type == "both":
             tmp = [str(j) for j in range(max_bulges + 1)] * 2
-            tmp.insert(len(tmp) // 2, "")
+            tmp.insert(len(tmp) // 2, "")  # add new line in table
             data_guides["# Bulges"] = "\n".join(tmp)
         else:
             tmp = [str(j) for j in range(max_bulges + 1)]
@@ -2839,11 +2628,6 @@ def update_table_general_profile(
                                 ["REFERENCE", str(sum(data_general_count.iloc[j, :]))]
                             )
                         )
-                    elif j == 2:
-                        data_guides["Total"].append(
-                            f"\t{str(sum(data_general_count.iloc[j, :]))}"
-                        )
-                        data_guides["Total"].append("\t")
                     elif j == 4:
                         data_guides["Total"].append(
                             "\t\t".join(
@@ -2852,8 +2636,10 @@ def update_table_general_profile(
                         )
                     else:
                         data_guides["Total"].append(
-                            f"\t{str(sum(data_general_count.iloc[i, :]))}"
+                            f"\t{str(sum(data_general_count.iloc[j, :]))}"
                         )
+                        if j == 2:  # add empty line
+                            data_guides["Total"].append("")
             elif max_bulges == 1:
                 for j in range(len(data_guides["# Bulges"].split("\n")) - 1):
                     if j == 1:
@@ -5292,11 +5078,210 @@ def update_content_tab(
     raise PreventUpdate
 
 
-# TODO: move auxiliary functions close to each other in this file
+# ------------------------------------------------------------------------------
+# auxiliary callbacks and functions
+
+@cache.memoize()
+def global_store_general(path_file_to_load: str) -> pd.DataFrame:
+    """Cache target files to improve results visualization and get better
+    performances.
+
+    ...
+
+    Parameters
+    ----------
+    path_file_to_load : str
+        Path to file to cache
+
+    Returns
+    -------
+    pandas.DataFrame
+        Results table
+    """
+
+    if not isinstance(path_file_to_load, str):
+        raise TypeError(
+            f"Expected {str.__name__}, got {type(path_file_to_load).__name__}"
+        )
+    if path_file_to_load is not None and not os.path.isfile(path_file_to_load):
+        raise FileNotFoundError(f"Unable to locate {path_file_to_load}")
+    if path_file_to_load is None:
+        return ""  # do not cache anything
+    if "scomposition" in path_file_to_load:
+        rows_to_skip = 1
+    else:
+        rows_to_skip = 1  # Skip header
+    # make sure file to cache is not empty
+    if os.path.getsize(path_file_to_load) > 0:
+        # TSV format -> sep="\t"
+        df = pd.read_csv(path_file_to_load, sep="\t", index_col=False, na_filter=False)
+    else:
+        df = None  # empty file, no need for caching
+    return df
+
+
+# @cache.memoize()
+def global_store_subset_no_ref(
+    job_id: str, bulge_t: str, bulge_s: str, mms: str, guide: str, page: int
+) -> pd.DataFrame:
+    """Cache targets files to improve visualization performance.
+
+    ...
+
+    Parameters
+    ----------
+    job_id : str
+        Unique job identifier
+    bulge_t : str
+        Bulge type
+    bulge_s : str
+    mms : str
+        Mismatches
+    guide : str
+        Guide
+    page : int
+        Current page
+
+    Returns
+    -------
+    pd.DataFrame
+        Results table
+    """
+
+    if not isinstance(job_id, str):
+        raise TypeError(f"Expected {str.__name__}, got {type(job_id).__name__}")
+    if not isinstance(bulge_t, str):
+        raise TypeError(f"Expected {str.__name__}, got {type(bulge_t).__name__}")
+    if not isinstance(bulge_s, str):
+        raise TypeError(f"Expected {str.__name__}, got {type(bulge_s).__name__}")
+    if not isinstance(mms, str):
+        raise TypeError(f"Expected {str.__name__}, got {type(mms).__name__}")
+    if not isinstance(guide, str):
+        raise TypeError(f"Expected {str.__name__}, got {type(guide).__name__}")
+    if not isinstance(page, int):
+        raise TypeError(f"Expected {int.__name__}, got {type(page).__name__}")
+    if job_id is None:
+        return ""  # do not do anything
+    # recover path to db file
+    db_path = glob(
+        os.path.join(current_working_directory, RESULTS_DIR, job_id, ".*.db")
+    )[
+        0
+    ]  # take the first element
+    assert isinstance(db_path, str)
+    # initialize db
+    conn = sqlite3.connect(db_path)
+    c = conn.cursor()
+    # recover the filtering criterion from drop-down bar
+    filter_criterion = read_json(job_id)
+    if filter_criterion not in FILTERING_CRITERIA:
+        raise ValueError(f"Forbidden filtering criterion ({filter_criterion})")
+    query_cols = get_query_column(filter_criterion)
+    # perform query on db
+    result = pd.read_sql_query(
+        'SELECT * FROM final_table WHERE "{}"=\'{}\' AND "{}"=\'{}\' AND "{}"={} AND "{}"={} AND "{}"<>\'NA\' LIMIT {} OFFSET {}'.format(
+            GUIDE_COLUMN,
+            guide,
+            query_cols["bul_type"],
+            bulge_t,
+            query_cols["bul"],
+            bulge_s,
+            query_cols["mm"],
+            mms,
+            query_cols["samples"],
+            PAGE_SIZE,
+            page * PAGE_SIZE,
+        ),
+        conn,
+    )
+    return result
+
+
+# @cache.memoize()
+def global_store_subset(
+    job_id: str, bulge_t: str, bulge_s: str, mms: str, guide: str, page: int
+) -> pd.DataFrame:
+    """Cache targets files to improve visualization performance.
+
+    ...
+
+    Parameters
+    ----------
+    job_id : str
+        Unique job identifier
+    bulge_t : str
+        Bulge type
+    bulge_s : str
+    mms : str
+        Mismatches
+    guide : str
+        Guide
+    page : int
+        Current page
+
+    Returns
+    -------
+    pd.DataFrame
+        Res
+    """
+
+    if not isinstance(job_id, str):
+        raise TypeError(f"Expected {str.__name__}, got {type(job_id).__name__}")
+    if not isinstance(bulge_t, str):
+        raise TypeError(f"Expected {str.__name__}, got {type(bulge_t).__name__}")
+    if not isinstance(bulge_s, str):
+        raise TypeError(f"Expected {str.__name__}, got {type(bulge_s).__name__}")
+    if not isinstance(mms, str):
+        raise TypeError(f"Expected {str.__name__}, got {type(mms).__name__}")
+    if not isinstance(guide, str):
+        raise TypeError(f"Expected {str.__name__}, got {type(guide).__name__}")
+    if not isinstance(page, int):
+        raise TypeError(f"Expected {int.__name__}, got {type(page).__name__}")
+    if job_id is None:
+        return ""  # do not do anything
+    # recover path to db
+    db_path = glob(
+        os.path.join(current_working_directory, RESULTS_DIR, job_id, ".*.db")
+    )[0]
+    assert isinstance(db_path, str)
+    # initialize db
+    conn = sqlite3.connect(db_path)
+    c = conn.cursor()
+    # recover filtering criterion from drop-down bar
+    filter_criterion = read_json(job_id)
+    if not filter_criterion in FILTERING_CRITERIA:
+        raise ValueError(f"Forbidden filtering criterion ({filter_criterion})")
+    query_cols = get_query_column(filter_criterion)
+    # perform query on db
+    result = pd.read_sql_query(
+        'SELECT * FROM final_table WHERE "{}"=\'{}\' AND "{}"=\'{}\' AND "{}"={} AND "{}"={} LIMIT {} OFFSET {}'.format(
+            GUIDE_COLUMN,
+            guide,
+            query_cols["bul_type"],
+            bulge_t,
+            query_cols["bul"],
+            bulge_s,
+            query_cols["mm"],
+            mms,
+            PAGE_SIZE,
+            page * PAGE_SIZE,
+        ),
+        conn,
+    )
+    # add mismatches and bulges
+    targets_with_mm_bul = os.path.join(
+        current_working_directory,
+        RESULTS_DIR,
+        job_id,
+        f"{job_id}.{bulge_t}.{mms}.{bulge_s}.{guide}.targets.tsv",
+    )
+    # store query results in TSV file
+    result.to_csv(targets_with_mm_bul, sep="\t", na_rep="NA", index=False)
+    return result
+
+
 # Perform expensive loading of a dataframe and save result into 'global store'
 # Cache are in the Cache directory
-
-
 @cache.memoize()
 def global_store(job_id: str) -> pd.DataFrame:
     """Perform once dataframe loading and cache data in Cache directory.
