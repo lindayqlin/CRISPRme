@@ -66,6 +66,7 @@ from app import (
 )
 from PostProcess.supportFunctions.loadSample import associateSample
 from PostProcess.generate_img_radar_chart import compute_radar_chart
+from PostProcess.change_headers_bestMerge import convert_headers
 from PostProcess import CFDGraph, query_manager
 
 from dash.exceptions import PreventUpdate
@@ -1354,12 +1355,18 @@ def cluster_page(job_id: str, hash_term: str) -> html.Div:
             # for all targets
 
         # TODO: review this part
-        os.system(
-            f"python {app_main_directory}/PostProcess/change_headers_bestMerge.py {cluster_grep_result} {cluster_grep_result}.tmp"
-        )
-        os.system(
-            f"mv -f {cluster_grep_result}.tmp {cluster_grep_result} > /dev/null 2>&1"
-        )
+        convert_headers(cluster_grep_result, f"{cluster_grep_result}.tmp")
+        # rename the resulting file
+        cmd = f"mv -f {cluster_grep_result}.tmp {cluster_grep_result} > /dev/null 2>&1"
+        code = subprocess.call(cmd, shell=True)
+        if code != 0:
+            raise ValueError(f"An error occurred while running {cmd}")
+        # os.system(
+        #     f"python {app_main_directory}/PostProcess/change_headers_bestMerge.py {cluster_grep_result} {cluster_grep_result}.tmp"
+        # )
+        # os.system(
+        #     f"mv -f {cluster_grep_result}.tmp {cluster_grep_result} > /dev/null 2>&1"
+        # )
         # zip cluster results
         cmd = f"zip -j {cluster_grep_result.replace('txt', 'zip')} {cluster_grep_result} &"
         code = subprocess.call(cmd, shell=True)
