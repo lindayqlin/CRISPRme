@@ -1,12 +1,6 @@
+"""Convert old bestMerge file format to the more recent alt_results format, 
+which is used to load and display the results within CRISPRme webpage.
 """
-Created on Sat May 29 18:02:45 2021
-
-@author: franc
-"""
-
-'''
-Script used to convert from old bestMerge format to new alt_results format
-'''
 
 
 from .postprocess_utils import (

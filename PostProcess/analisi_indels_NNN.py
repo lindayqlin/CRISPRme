@@ -41,7 +41,7 @@ Added compatibility with dictionary chr_pos -> s1,s2;A,C/sNew;A,T
 
 import pickle
 from typing import final  # to read CFD matrices
-from supportFunctions.loadSample import associateSample
+from supportFunctions.loadSample import associate_sample
 import re
 import multiprocessing
 import string

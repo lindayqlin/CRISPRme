@@ -64,7 +64,7 @@ from app import (
     current_working_directory,
     URL,
 )
-from PostProcess.supportFunctions.loadSample import associateSample
+from PostProcess.supportFunctions.loadSample import associate_sample
 from PostProcess.generate_img_radar_chart import compute_radar_chart
 from PostProcess.change_headers_bestMerge import convert_headers
 from PostProcess import CFDGraph, query_manager
@@ -1164,7 +1164,7 @@ def update_table_cluster(
         (
             dict_sample_to_pop,
             dict_pop_to_superpop,
-        ) = associateSample.loadSampleAssociation(
+        ) = associate_sample.load_samples_association(
             os.path.join(job_directory, SAMPLES_FILE)
         )[
             :2
@@ -3169,7 +3169,7 @@ def filter_sample_table(
     # get job identifier
     job_id = search.split("=")[-1]
     job_directory = os.path.join(current_working_directory, RESULTS_DIR, job_id)
-    population_1000gp = associateSample.loadSampleAssociation(
+    population_1000gp = associate_sample.load_samples_association(
         os.path.join(job_directory, SAMPLES_FILE)
     )[2]
     # read CRISPRme run parameters
@@ -3424,7 +3424,7 @@ def update_sample_drop(pop: str, search: str) -> Tuple[List, None]:
         return [], None  # no update required
     job_id = search.split("=")[-1]
     job_directory = os.path.join(current_working_directory, RESULTS_DIR, job_id)
-    pop_dict = associateSample.loadSampleAssociation(
+    pop_dict = associate_sample.load_samples_association(
         os.path.join(job_directory, SAMPLES_FILE)
     )[3]
     return [{"label": sample, "value": sample} for sample in pop_dict[pop]], None
@@ -3466,7 +3466,7 @@ def update_population_drop(superpop: str, search: str) -> Tuple[Dict, None]:
         raise PreventUpdate  # no update required
     job_id = search.split("=")[-1]
     job_directory = os.path.join(current_working_directory, RESULTS_DIR, job_id)
-    population_1000gp = associateSample.loadSampleAssociation(
+    population_1000gp = associate_sample.load_samples_association(
         os.path.join(job_directory, SAMPLES_FILE)
     )[2]
     return [{"label": i, "value": i} for i in population_1000gp[superpop]], None
@@ -4298,7 +4298,7 @@ def update_content_tab(
         more_info_col = ["Show Targets" for _ in range(samples_summary.shape[0])]
         samples_summary[""] = more_info_col
 
-        population_1000gp = associateSample.loadSampleAssociation(
+        population_1000gp = associate_sample.load_samples_association(
             os.path.join(job_directory, SAMPLES_FILE)
         )[2]
         super_populations = [{"label": i, "value": i} for i in population_1000gp.keys()]
@@ -4924,7 +4924,7 @@ def update_content_tab(
             {"label": str(i), "value": str(i)} for i in range(int(max_bulges) + 1)
         ]
         if genome_type != "ref":
-            population_1000gp = associateSample.loadSampleAssociation(
+            population_1000gp = associate_sample.load_samples_association(
                 os.path.join(job_directory, SAMPLES_FILE)
             )[2]
             super_populations = [
