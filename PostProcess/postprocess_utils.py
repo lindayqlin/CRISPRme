@@ -101,6 +101,10 @@ ALT_RESULTS_HEADER_NAMES = [
     "Variant_samples_(fewest_mm+b)", 
     "Annotation"
 ]
+# guide column in the results table
+GUIDE_COLUMN = "Spacer+PAM"
+# allowed filtering criteria
+FILTERING_CRITERIA = ["CFD", "fewest", "CRISTA"]
 
 
 

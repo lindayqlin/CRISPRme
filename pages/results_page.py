@@ -5602,7 +5602,7 @@ def update_output(
             # perform queries on data
             if thresh_drop != None:
                 alert = False
-                data = query_manager.shold(
+                data = query_manager.threshold_query(
                     target,
                     n_clicks,
                     page_current,
