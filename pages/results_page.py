@@ -5617,7 +5617,7 @@ def update_output(
                     current_working_directory,
                 )
             else:
-                data = query_manager.noshold(
+                data = query_manager.nothreshold_query(
                     target,
                     n_clicks,
                     page_current,

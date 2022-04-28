@@ -1,85 +1,145 @@
-'''
-Creation of dictionaries for single sample indels. Takes in input a chromosome and a sample id, and selects the variants 
-only from that sample. The position written in the dictionary is adjusted accordingly to the addition or removal of nucleotides.
-The name of the fasta file and the name in the #CHROM column MUST be the same.
-Use http://ftp.1000genomes.ebi.ac.uk/vol1/ftp/data_collections/1000_genomes_project/release/20181203_biallelic_SNV/ as vcf reference
-WARNING! About 20 minutes per vcf file, for a total of 80GB of disk space
-'''
-# argv 1 is All.chrX.gzip, the vcf file
-# argv 2 is selected sample
-# argv 3 is directory to save the dictionary
+"""Create dictionaries to handle samples indels and efficiently recover the 
+indels associated to each considered individual.
+"""
+
 
 import gzip
 import sys
 import json
 import time
+import os
 
-vcf_file = sys.argv[1]
-chr_name = vcf_file.split('.')
-for i in chr_name:
-    if 'chr' in i:
-        chr_name = i
-        break
-selected_sample = sys.argv[2]
-save_directory = sys.argv[3]
 
-dictionary_dict = dict()
-start_time = time.time()
-add_to_name = ''     #string to add to the chr number, eg in VCF hg38 -> is already chr1, so add_to_name is '';
-                        #VCF hg19 -> is 1, so add_to_name is 'chr'
-offset = 0      #Sum this value to the position of the variant ad adjust this value for every indel found
-with gzip.open(sys.argv[1], 'rb') as targets:
-    for line in targets:
-        line = line.decode('ascii')
-        if ('#CHROM') in line:
-            column_vcf = line.strip().split('\t')
-            sample_header_pos = column_vcf.index(selected_sample)
-            break
+def create_variant_dictionary(vcf_file: str, sample: str, outdir: str) -> None:
+    """Compute dictionaries to store indels for each sample in the dataset. 
+    The indel position written in the dictionary is adjusted accordingly
+    to the number of nucleotides added or removed by the indel.
 
-    first_line = next(targets).decode('ascii').strip().split('\t')
-    if 'chr' not in first_line[0]:
-        add_to_name = 'chr'
-    list_samples = []
-    list_chars = []
+    CAVEAT: The FASTA filename and the #CHROM column name must match.
+
+    The processing of each VCF file could take up to ~20 minutes and use 
+    ~80 GB of memory.
+
+    ...
+
+    Parameters
+    ----------
+    vcf_file : str
+        VCF file
+    sample : str
+        Sample
+    outdir : str
+        Output directory
     
-    hap = first_line[sample_header_pos].split('|')
-    for h in hap:   #NOTE posso avere anche 2|1 #TODO da finire
-        if '0' == h:
-            continue
-        variant_of_sample = int(h) - 1      #If in VAR i have TT,TTA,TTT and in sample 0|2, the variant is TTA
-        list_samples.append(selected_sample)
-        offset = offset + len(line[3]) - len(line[4].split(',')[variant_of_sample])
-        if len(line[3]) != 1 or len(line[4].split(',')[variant_of_sample]) != 1:    #Save only the SNP
+    Returns
+    -------
+    None
+    """
+
+    if not isinstance(vcf_file, str):
+        raise TypeError(
+            f"Expected {str.__name__}, got {type(vcf_file).__name__}"
+        )
+    if not os.path.isfile(vcf_file):
+        raise FileNotFoundError(f"Unable to locate {vcf_file}")
+    if not isinstance(sample, str):
+        raise TypeError(
+            f"Expected {str.__name__}, got {type(sample).__name__}"
+        )
+    if not isinstance(outdir, str):
+        raise TypeError(
+            f"Expected {str.__name__}, got {type(outdir).__name__}"
+        )
+    if not os.path.isdir(outdir):
+        raise FileNotFoundError(f"Unable to locate {outdir}")
+    # recover the chromosome
+    chrom = None
+    for e in vcf_file.split("."):
+        if "chrom" in e:
+            chrom = e
             break
-        chr_pos_key = add_to_name + line[0] + ',' + str(offset + int(line[1]))
-        #Add in last two position the ref and alt nucleotide, eg: chrX,100 -> sample1,sample5,sample10;A,T
-        #If no sample was found, the dict is chrX,100 -> ;A,T
-        list_chars.append(line[3])  #REF char
-        list_chars.append(line[4].split(',')[variant_of_sample])  #VAR char
-        try:
-            dictionary_dict[chr_pos_key] = ','.join(list_samples) + ';' + ','.join(list_chars)
-        except:
-            dictionary_dict[chr_pos_key] = ';' + ','.join(list_chars) #None
-    
-    for line in targets:                #Save CHROM [0], POS[1], REF [3], ALT [4], List of Samples [9:]
-        line = line.decode('ascii').strip().split('\t')
-        list_samples = []
-        list_chars = []
-        if ('1' in first_line[sample_header_pos]):
-            list_samples.append(selected_sample)
-        else:           #This variant is not found in the selected sample
-            continue
-        chr_pos_key = add_to_name + line[0] + ',' + line[1]
-        #Add in last two position the ref and alt nucleotide, eg: chrX,100 -> sample1,sample5,sample10;A,T
-        #If no sample was found, the dict is chrX,100 -> ;A,T
-        list_chars.append(line[3])
-        list_chars.append(line[4])
-        try:
-            dictionary_dict[chr_pos_key] = ','.join(list_samples) + ';' + ','.join(list_chars)
-        except:
-            dictionary_dict[chr_pos_key] = ';' + ','.join(list_chars) #None
-        #result.write(line[0] + '\t' + line[1] + '\t' + line[3] + '\t' + line[4] + '\t' + ','.join(list_samples) + '\n')
-        
-with open(save_directory + '_' + selected_sample + '/my_dict_' + chr_name + '.json', 'w') as f:
-    json.dump(dictionary_dict, f) 
-print('Created ' + 'my_dict_' + chr_name + '.json for sample ' + selected_sample + ' in', time.time() - start_time)
+    assert chrom is not None
+    start_time = time.time()
+    variants_dict = {}
+    # prefix to add to chromosome name (if hg38 OK, otherwise add "chr", e.g. hg19)
+    chrom_prefix = ""  
+    offset = 0  # value to sum to the variant position --> adjusted for each indel
+    try:
+        vcf_handle = gzip.open(vcf_file, mode="rb")  # read the GZipped VCF
+        for line in vcf_handle:
+            line = line.decode("ascii")  # decode bits lines
+            if "#CHROM" in line:  # header column
+                vcf_cols = line.strip().split()  
+                sample_col = vcf_cols.index(sample)  # sample column index
+                break  # proceed reading variants
+        line_split = vcf_handle.readline().decode("ascii").strip().split()
+        if "chr" not in line_split[0]:  # check if chromosome name has the right format
+            chrom_prefix = "chr"
+        samples = []
+        nucs = []
+        haplotype = line_split[sample_col].split("|")
+        # TODO: complete this procedure
+        # NOTE: is possible to also have 2|1 cases
+        for hap in haplotype: 
+            if hap == "0":
+                continue
+            try:
+                # EXAMPLE: let us assume VAR v is TT, TTA, TTT and SAMPLE
+                #   genotype is 0|2, the variant is TTA
+                variant = int(hap) - 1
+            except ValueError as e:
+                raise e
+            samples.append(sample)  # add sample
+            # compute offset
+            offset += (len(line[3]) - len(line[4].split(",")[variant]))
+            if len(line[3]) != 1 or len(line[4].split(",")[variant]) != 1:
+                break  # store only the SNP
+            chrom_pos = f"{chrom_prefix}{line[0]},{offset + int(line[1])}"
+            # add ref and alt nuc in the last two positions
+            # E.g. chrX,100 --> sample1,sample5,sample10;A,T
+            # if no sample is found the dict key would be chrX,100 --> ;A,T
+            nucs.append(line[3])  # REF
+            nucs.append(line[4].split(",")[variant])  # VAR
+            try:
+                variants_dict[chrom_pos] = ";".join(
+                    [",".join(samples), ",".join([nucs])]
+                )  # sample found
+            except KeyError:
+                variants_dict[chrom_pos] = f";{','.join(nucs)}"  # no sample
+        for line in vcf_handle:
+            line = line.decode("ascii").strip().split("\t")
+            samples = []
+            nucs = []
+            if "1" in line_split[sample_col]:  # variant found for current sample
+                samples.append(sample)
+                chrom_pos = f"{chrom_prefix}{line[0],{line[1]}}"
+                nucs.append(line[3])  # REF
+                nucs.append(line[4])  # VAR
+                try:
+                    variants_dict[chrom_pos] = ";".join(
+                        [",".join(samples), ",".join([nucs])]
+                    )  # sample found
+                except KeyError:
+                    variants_dict[chrom_pos] = f";{','.join(nucs)}"  # no sample
+    except OSError as e:
+        raise e
+    finally:
+        vcf_handle.close()
+    # store dictionaries in JSON file
+    try:
+        out_json_fname = os.path.join(
+            f"{outdir}_{sample}", f"my_dict_{chrom}.json"
+        )
+        json_handle = open(out_json_fname, mode="w")
+        json.dump(variants_dict, json_handle)  # write the JSON
+    except OSError as e:
+        raise e
+    finally:
+        json_handle.close()
+    stop_time = time.time()
+    sys.stderr.write(
+        str(
+            f"Creation of my_dict_{chrom}.json completed for sample {sample} "
+            "in %.2fs" % (stop_time - start_time)
+        )
+    )
