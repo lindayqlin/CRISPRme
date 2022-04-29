@@ -1,39 +1,81 @@
-#!/usr/bin/env python
+"""Compute the risk scores from scores stored in the input scores file. The 
+resulting risk scores are stored in the output file along with the other info
+stored in the original input file.
+"""
+
+import numpy as np
 
 import sys
+import os
 
 
-file_in = sys.argv[1]
-file_out = sys.argv[2]
-alt = sys.argv[3]
-if alt == 'True':
-    alt = True
-else:
-    alt = False
+def assign_risk_score(
+    score_fname: str, outfile: str, alternate_genome: bool
+) -> None:
+    """Compute risk score and create a new scores file with the computed risk
+    scores.
 
-with open(file_in, 'r') as fin:
-    with open(file_out, 'w') as fout:
-        header = fin.readline().strip().split('\t')
-        # header.insert(22, 'Highest_CFD_Risk_Score')
-        # header.insert(23, 'Highest_CFD_Absolute_Risk_Score')
-        # header.append('MMBLG_CFD_Risk_Score')
-        # header.append('MMBLG_CFD_Absolute_Risk_Score')
-        header.append('Highest_CFD_Risk_Score')
-        header.append('Highest_CFD_Absolute_Risk_Score')
-        if alt:
-            header.append('CLUSTER_ID')
-        fout.write('\t'.join(header)+'\n')
-        for line in fin:
-            splitted = line.strip().split('\t')
-            cfd_diff = float(splitted[20]) - float(splitted[21])
-            abs_diff = abs(cfd_diff)
-            # mmblg_cfd_diff = float(splitted[42]) - float(splitted[43])
-            # mmblg_abs_diff = abs(mmblg_cfd_diff)
-            fout.write('\t'.join(splitted)+'\t' +
-                       str(cfd_diff)+'\t'+str(abs_diff)+'\n')
-            # if alt:
-            #     fout.write('\t'.join(splitted[:22])+'\t'+"{:.3f}".format(cfd_diff)+'\t'+"{:.3f}".format(abs_diff)+"\t"+"\t".join(
-            #         splitted[22:-1])+'\t'+"{:.3f}".format(mmblg_cfd_diff)+'\t'+"{:.3f}".format(mmblg_abs_diff)+"\t"+splitted[-1]+'\n')
-            # else:
-            #     fout.write('\t'.join(splitted[:22])+'\t'+"{:.3f}".format(cfd_diff)+'\t'+"{:.3f}".format(abs_diff)+"\t"+"\t".join(
-            #         splitted[22:])+'\t'+"{:.3f}".format(mmblg_cfd_diff)+'\t'+"{:.3f}".format(mmblg_abs_diff)+'\n')
+    ...
+
+    Parameters
+    ----------
+    score_fname : str
+        Scores file
+    outfile : str
+        Outfile
+    alternate_genome : bool
+
+    Returns
+    -------
+    None
+    """
+    
+    if not isinstance(score_fname, str):
+        raise TypeError(
+            f"Expected {str.__name__}, got {type(score_fname).__name__}"
+        )
+    if not os.path.isfile(score_fname):
+        raise FileNotFoundError(f"Unable to locate {score_fname}")
+    if not isinstance(outfile, str):
+        raise TypeError(
+            f"Expected {str.__name__}, got {type(outfile).__name__}"
+        )
+    # read score file
+    try:
+        handle_in = open(score_fname, mode="r") 
+        handle_out = open(outfile, mode="w")
+        header = handle_in.readline().strip().split()
+        # add risk score columns
+        header.append("Highest_CFD_Risk_Score")
+        header.append("Highest_CFD_Absolute_Risk_Score")
+        if alternate_genome:
+            header.append("CLUSTER_ID")  # add guide cluster column
+        header = "\t".join(header)
+        handle_out.write(f"{header}\n")
+        # read data from scores file
+        for line in handle_in:
+            line_split = line.strip().split()
+            diff = float(line_split[20]) - float(line_split[21])
+            line = "\t".join(line_split)
+            handle_out.write(f"{line}\t{diff}\t{np.abs(diff)}\n")
+    except OSError as e:
+        raise e
+    finally:
+        handle_in.close()
+        handle_out.close()
+
+
+# TODO: remove main and use directly the function
+def main():
+    scores_file = sys.argv[1]
+    outfile = sys.argv[2]
+    alternate = sys.argv[3]
+    if alternate == "True":
+        alternate = True
+    else:
+        alternate = False
+    assign_risk_score(scores_file, outfile, alternate)
+
+
+if __name__ == "__main__":
+    main()
