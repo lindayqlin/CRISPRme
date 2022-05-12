@@ -1,86 +1,184 @@
-#!/usr/bin/env python
+"""Read, filter and merge VCF files. The functions below remove the variants not 
+passing the filter and merge multi-variant alleles into a single allele. 
+Moreover, call bcftools to left-align and normalize indels.
 
+The results are stored in a new VCF file.
+"""
+
+
+import subprocess
+import multiprocessing
 import gzip
 import sys
 import glob
 import os
-import multiprocessing
+ 
 
-vcfDIR = sys.argv[1]
-inPop = open(sys.argv[2], 'r').readlines()
-threads = 0
-try:
-    threads = int(sys.argv[3])
-except:
-    threads = len(os.sched_getaffinity(0))-2
+def convert_vcf(vcf_fname: str, populations: str) -> str:
+    """Read and filter the input VCF file. The filtered data are written in a
+    new VCF file, maintaining the same name of the original VCF.
 
-def convertVCF(inVCF):
-    #open VCF file
-    outVCFname = inVCF.replace('bgz', 'gz')
-    outVCF = gzip.open(inVCF.replace('bgz', 'gz'), 'wt')
-    inVCF = gzip.open(inVCF, 'rt')
+    ...
 
-    #read samplesID from file
-    header = list()
-    popDict = dict()
-    for pop in inPop:
-        if '#' in pop:
-            continue
-        popDict[pop.split()[0].strip()] = '0/0'
+    Parameters
+    ----------
+    vcf_fname : str
+        Input VCF file
+    populations : str
+        Populations file
 
-    #read header from original VCF
-    for line in inVCF:
-        if '##' in line:
-            header.append(line.strip())
-        else:
-            popheader = '\t'.join(popDict.keys())
-            header.append('##FORMAT=<ID=GT,Number=1,Type=String,Description="Sample Collapsed Genotype">')
-            header.append(line.strip()+'\tFORMAT'+'\t'+popheader+'\n')
-            break
-    #insert header into new VCF
-    outVCF.write('\n'.join(header))
+    Returns
+    -------
+    str
+        Output VCF file
+    """
 
-    #read each variant into the VCF
-    for line in inVCF:
-        split = line.strip().split('\t')
-        if split[6] != 'PASS': #skip rows with no PASS in FILTER
-            continue
-        info = split[7].strip().split(';')
-        for pop in popDict:
-            popDict[pop] = '0/0'
-            for index, data in enumerate(info): #read AC for each gnomAD population and insert a fake GT for each sample
-                if 'AC_'+str(pop)+'=' in data:
-                    ACvalue = int(data.strip().split('=')[1])
-                    if ACvalue > 0:
-                        popDict[pop] = '0/1'
-        split[7] = info[2]
-        #write each line passing the filtering into the new VCF
-        outVCF.write('\t'.join(split[:8])+'\tGT\t'+'\t'.join(popDict.values())+'\n')
+    if not isinstance(vcf_fname, str):
+        raise TypeError(
+            f"Expected {str.__name__}, got {type(vcf_fname).__name__}"
+        )
+    if not os.path.isfile(vcf_fname):
+        raise FileNotFoundError(f"Unable to find {vcf_fname}")
+    if not isinstance(populations, str):
+        raise TypeError(
+            f"Expected {str.__name__}, got {type(populations).__name__}"
+        )
+    if not os.path.isfile(populations):
+        raise FileNotFoundError(f"Unable to find {populations}")
+    outvcf_fname = vcf_fname.replace("bgz", "gz")
+    try:
+        populations = open(populations, mode="r").readlines()  # populations list
+        population_dict = {
+            pop.split()[0].strip(): "0/0" 
+            for pop in populations
+            if "#" not in pop  # skip comments
+        }
+    except OSError as e:
+        raise e
+    try:
+        vcf_in_handle = gzip.open(vcf_fname, mode="rt")
+        vcf_out_handle = gzip.open(outvcf_fname, mode="wt") 
+        # read VCF header
+        header = []
+        for line in vcf_in_handle:
+            if "##" in line:  # header lines
+                header.append(line.strip())
+            else:
+                # add populations to header in the new VCF file
+                popheader = "\t".join(population_dict.keys())
+                header.append(
+                    "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Sample Collapsed Genotype\">"
+                )
+                header.append(f"{line.strip()}\tFORMAT\t{popheader}\n")
+                break 
+        # write the header
+        vcf_out_handle.write("\n".join(header))
+        # read variants in the VCF
+        for line in vcf_in_handle:
+            line_split = line.strip().split()
+            if line_split[6] == "PASS":  # skip rows with PASS on filter
+                continue
+            info = line_split[7].strip().split(";")
+            for pop in population_dict.keys():
+                population_dict[pop] = "0/0"
+                # read AC for each gnomAD population and insert fake genotypes
+                # for each sample
+                for i, data in enumerate(info):
+                    if f"AC_{pop}=" in data:
+                        ac_value = int(data.split("=")[1])
+                        if ac_value > 0:
+                            population_dict[pop] = "0/1"
+            line_split[7] = info[2]
+            # write lines passing the filtering step on the out VCF
+            outvcf_fname.write(
+               f"{'\t'.join(line_split[:8])}\tGT\t{'\t'.join(population_dict.values())}\n"
+            )
+    except OSError as e:
+        raise e
+    finally:
+        vcf_in_handle.close()
+        vcf_out_handle.close()
+    assert os.path.isfile(outvcf_fname)  # file should have been created
+    assert os.stat(outvcf_fname).st_size > 0  # file should not be empty
+    return outvcf_fname
 
-    inVCF.close()
-    outVCF.close()
-    return outVCFname
 
-def bcftools_merging(outVCFname):    
-    # finalOutVCF = outVCFname.replace('genomes','genomes.collapsed')
-    tempName = outVCFname.strip().split('.')
-    tempName[-3] = tempName[-3]+'.collapsed'
-    finalOutVCF = '.'.join(tempName)
-    os.system(f"bcftools norm -m+ -O z -o {finalOutVCF} {outVCFname}")
+def bcftools_merging(vcf_fname: str) -> None:
+    """Call BCF tools to left-align and normalize indels available in the input
+    VCF file.
+
+    ...
+
+    Parameters
+    ----------
+    vcf_fname : str
+        Input VCF file
     
-def full_process(inVCF):
-    #function to process each VCF from initial conversion to collapsing multi-variant alleles with shared reference into one entry
-    outVCFname = convertVCF(inVCF) #convert VCF from gnomADv3.1 to VCF4.2 compatible with CRISRPme
-    bcftools_merging(outVCFname) #merge multi-variant alleles into single entry
-    os.system(f"rm -f {outVCFname}") #removed unused temp vcf file
+    Returns
+    -------
+    None
+    """
+
+    if not isinstance(vcf_fname, str):
+        raise TypeError(
+            f"Expected {str.__name__}, got {type(vcf_fname).__name__}"
+        )
+    if not os.path.isfile(vcf_fname):
+        raise FileNotFoundError(f"Unable to find {vcf_fname}")
+    vcf_fname_prefix = vcf_fname.split(".")
+    vcf_fname_prefix[-3] = f"{vcf_fname_prefix[-3]}.collapsed"
+    outvcf_fname = ".".join(vcf_fname_prefix)
+    # call bcftools to left-align and normalize indels
+    cmd = f"bcftools norm -m+ -O z -o {outvcf_fname} {vcf_fname}"
+    code = subprocess.call(cmd, shell=True)
+    if code != 0:
+        raise subprocess.SubprocessError(f"An error occurred while running {cmd}")
 
 
-if __name__ == '__main__':
+def process_vcf(vcf_fname: str, populations: str) -> None:
+    """Filter the input VCF file to keep only variants passing filtering and 
+    collapse multi-variant alleles with shared reference into single entries.
+
+    ...
+    
+    Parameters
+    ----------
+    vcf_fname: str
+        Input VCF file
+    populations : str
+        Populations file
+
+    Returns
+    -------
+    None
+    """
+
+    outvcf_fname = convert_vcf(vcf_fname, populations)  # filter VCF
+    bcftools_merging(outvcf_fname)  # merge alleles and normalize indels
+    # delete old VCF
+    cmd = f"rm -f {outvcf_fname}"
+
+
+# TODO: remove main() use only function
+def main():
+    vcf_dir = sys.argv[1]
+    populations = open(sys.argv[2], mode="r").readlines()
+    threads = 0
+    try:
+        threads = int(sys.argv[3])
+    except:
+        # limit no. cores to those restricted for current process 
+        threads = len(os.sched_getaffinity(0)) - 2 
     pool = multiprocessing.Pool(threads)
-    #call convert vcf for each vcf in dir
-    listVCF = glob.glob(vcfDIR+'/*.vcf.bgz')
-    for inVCF in listVCF:
-        pool.apply_async(full_process, args=(inVCF,))
-    # wait until all threads are completed than join
+    # call convert_vcf() for each VCF in the directory
+    vcfs = glob.glob(os.path.join(vcf_dir, "*.vcf.bgz"))
+    for vcf in vcfs:
+        pool.apply_async(process_vcf, args=(vcf, populations,))
+    # wait till all threads completed their job and join
     pool.close()
     pool.join()
+
+
+if __name__ == "__main__":
+    main()
+
