@@ -5080,7 +5080,7 @@ def update_content_tab(
         cfd_path = os.path.join(job_directory, f"{job_id}.CFDGraph.txt")
         if not os.path.isfile(cfd_path):  # No file found to display CFD graph
             return fl
-        fl.extend(CFDGraph.CFDGraph(cfd_path))
+        fl.extend(CFDGraph.CFD_graph(cfd_path))
         return fl
     raise PreventUpdate
 
