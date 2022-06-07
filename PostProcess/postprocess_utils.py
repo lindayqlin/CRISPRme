@@ -105,6 +105,21 @@ ALT_RESULTS_HEADER_NAMES = [
 GUIDE_COLUMN = "Spacer+PAM"
 # allowed filtering criteria
 FILTERING_CRITERIA = ["CFD", "fewest", "CRISTA"]
+# dictionary to map pandas datatypes to SQL datatypes
+DTYPE_SQLTYPE_MAP = {"O": "TEXT", "int64": "INTEGER", "float64": "NUMERIC"}
+# database column names
+DB_COLNAMES = [
+    "Spacer+PAM",
+    "Mismatches_(highest_CFD)",
+    "Bulges_(highest_CFD)",
+    "Mismatches+bulges_(highest_CFD)",
+    "CFD_score_(highest_CFD)",
+    "CFD_risk_score_(highest_CFD)",
+    "Start_coordinate_(highest_CFD)",
+    "Variant_samples_(highest_CFD)",
+    "Chromosome",
+    "Bulge_type_(highest_CFD)",
+]
 
 
 
