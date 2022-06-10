@@ -601,6 +601,7 @@ def complete_search():
         # p.write('Gecko\t' + str(gecko_comp) + '\n')
         p.write('Ref_comp\t' + str(ref_comparison) + '\n')
         p.close()
+    # NOTE: Here 
     len_guide_sequence = total_pam_len - pam_len
     if sequence_use:
         guides = list()
