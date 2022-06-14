@@ -54,8 +54,16 @@ CRISPRme_COMMANDS_ARGS = {
         "bdna",
         "brna",
         "merge",
-        "output_name"
-    ]
+        "output_name",
+    ],
+    "gnomAD-converter": [
+        "threads",
+        "command",
+        "verbose",
+        "debug",
+        "vcf",
+        "samples",
+    ],
 }
 IUPAC_ALPHABET = {
     "A",

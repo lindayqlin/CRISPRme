@@ -70,7 +70,9 @@ from crisprme.utils import (
     parse_PAM_sequence_file,
     parse_guide_sequences_file
 )
-from crisprme.crisprme_commands import CompleteSearch
+from crisprme.crisprme_commands import (
+    CompleteSearch, GnomADConverter
+)
 
 from typing import List, Optional
 from argparse import Namespace
@@ -284,7 +286,7 @@ def get_parser() -> CrisprmeArgumentParser:
         metavar="MERGE-THRESHOLD",
         dest="merge",
         help="Specify the threshold (number of close nucleotides) used to merge "
-             "close targets"
+             "close targets."
     )
     group.add_argument(
         "-o",
@@ -295,12 +297,33 @@ def get_parser() -> CrisprmeArgumentParser:
         dest="output_name",
         help="Output name for the results."
     )
+    # gnomAD-converter arguments
+    group = parser.add_argument_group("gnomAD-converter options")
+    group.add_argument(
+        "-v",
+        "--vcf",
+        type=str,
+        nargs="?",
+        default="",
+        metavar="GnomAD VCF",
+        dest="vcf",
+        help="Directory containing the gnomADv3.1 VCFs to convert."
+    )
+    group.add_argument(
+        "-s",
+        "--samples",
+        type=str,
+        nargs="?",
+        default="",
+        dest="samples",
+        help="File containing sample IDs to link samples to gnomAD variants."
+    )
     return parser
 
 
 def complete_search_input_check(
     args: Namespace, parser: CrisprmeArgumentParser
-) -> None:
+) -> CompleteSearch:
     """Check arguments consistency for complete search CRISPRme command.
 
     ...
@@ -314,7 +337,7 @@ def complete_search_input_check(
     
     Returns
     -------
-    None
+    CompleteSearch
     """
 
     if not isinstance(args, Namespace):
@@ -546,8 +569,6 @@ def complete_search_input_check(
             )
         finally:
             handle.close()  # close out stream
-    # force empty mail value
-    mail_empty = "_"
     if not useseqs:
         # copy guides file to guides.txt
         cmd = f"cp {guide_file} {os.path.join(outdir, 'guides.txt')}"
@@ -579,9 +600,71 @@ def complete_search_input_check(
         outname,
         outdir
     )
+    # force empty mail value
+    complete_search.set_mail("_")
     complete_search.write_params_file()  # write the selected input parameters
     # return an object with carrying all the input arguments
     return complete_search 
+
+
+def gnomAD_converter_input_check(
+    args: Namespace, parser: CrisprmeArgumentParser
+) -> GnomADConverter:
+    """Check arguments consistency for gnomAD VCF converter.
+
+    ...
+
+    Parameters
+    ----------
+    args : Namespace
+        GnomAD-converter input arguments
+    parser : CrisprmeArgumentParser
+        Parsed input arguments
+
+    Returns
+    -------
+    GnomADConverter
+    """
+
+    if not isinstance(args, Namespace):
+        exception_handler(
+            TypeError,
+            f"Exepcted {Namespace.__name__}, got {type(args).__name__}",
+            args.debug
+        )
+    if not isinstance(parser, CrisprmeArgumentParser):
+        exception_handler(
+            TypeError,
+            f"Expected {CrisprmeArgumentParser.__name__}, got {type(parser).__name__}",
+            args.debug
+        )
+    # check if only gnomAD-converter arguments have been given
+    if any(
+        [
+            a not in CRISPRme_COMMANDS_ARGS[CRISPRme_COMMANDS[1]] 
+            for a in vars(args).keys()
+        ]
+    ):
+        # if found something, raise error
+        parser.error("Wrong arguments given to \"complete-search\" command")  
+    # check gnomAD VCF directory
+    if not args.vcf:
+        parser.error("Missing gnomAD VCF location.")
+    else:
+        vcf = os.path.abspath(args.vcf)
+        if not os.path.isdir(vcf):
+            parser.error(f"Unable to locate {args.vcf}")
+    if not args.samples:
+        parser.error("Missing samples IDs file")
+    else:
+        samples_file = os.path.abspath(args.samples)
+        if not os.path.isfile(samples_file):
+            parser.error(f"Unable to locate {args.samples}")
+    # create gnomAD-converter object
+    gnomad_converter = GnomADConverter(
+        args.threads, args.verbose, args.debug, vcf, samples_file
+    )
+    return gnomad_converter
 
 
 def main(cmdline_args: Optional[List[str]] = None) -> None:
@@ -648,6 +731,8 @@ def main(cmdline_args: Optional[List[str]] = None) -> None:
         # single commands input argument check
         if crisprme_command == CRISPRme_COMMANDS[0]:  # complete-search
             workflow = complete_search_input_check(args, parser)
+        elif crisprme_command == CRISPRme_COMMANDS[1]:  # gnomAD-converter
+            pass
         if args.verbose:
             sys.stderr.write("Arguments parsing finished.") 
         # select the command to execute

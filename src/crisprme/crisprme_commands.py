@@ -14,7 +14,7 @@ For each available command, we define the corresponding class.
 
 from crisprme.utils import exception_handler
 
-from typing import List, NoReturn
+from typing import List
 
 import os
 
@@ -124,7 +124,7 @@ class CompleteSearch(CRISPRmeCommand):
         self._outname = outname
         self._outdir = outdir
 
-    def set_guides(self, guides: List[str]) -> NoReturn:
+    def set_guides(self, guides: List[str]) -> None:
         """Set _guides attribute.
 
         ...
@@ -136,7 +136,7 @@ class CompleteSearch(CRISPRmeCommand):
 
         Returns
         -------
-        NoReturn 
+        None 
         """
         if not isinstance(guides, list):
             exception_handler(
@@ -146,7 +146,7 @@ class CompleteSearch(CRISPRmeCommand):
             )
         self._guides = guides
 
-    def set_main(self, mail_address: str) -> NoReturn:
+    def set_mail(self, mail_address: str) -> None:
         """Set mail_address (never used on command-line version).
 
         ...
@@ -158,7 +158,7 @@ class CompleteSearch(CRISPRmeCommand):
 
         Returns
         -------
-        NoReturn
+        None
         """
         if not isinstance(mail_address, str):
             exception_handler(
@@ -174,7 +174,6 @@ class CompleteSearch(CRISPRmeCommand):
     @property 
     def outname(self):
         return self._get_outname()
-
 
     def write_params_file(self) -> None:
         """Write complete search Paramaters in a TXT file.
@@ -216,4 +215,38 @@ class CompleteSearch(CRISPRmeCommand):
         finally:
             handle.close()  # close channel
 
+
+class GnomADConverter(CRISPRmeCommand):
+    """gnomAD VCF converter command class. The class extends `CRISPRmeCommand` 
+    class.
+
+    ...
+
+    Attributes
+    ----------
+
+    Methods
+    -------
+    """
+
+    def __init__(
+        self, threads: int, verbose: bool, debug: bool, vcf: str, samples: str
+    ) -> None:
+        super().__init__(threads, verbose, debug)
+        self._vcf = vcf
+        self._samples = samples
+
+    def _get_vcf(self):
+        return self._vcf
+    
+    @property
+    def vcf(self):
+        return self._get_vcf()
+
+    def _get_samples(self):
+        return self._samples
+
+    @property
+    def samples(self):
+        return self._get_samples()
         
