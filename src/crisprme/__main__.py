@@ -58,18 +58,20 @@ from crisprme.crisprme_argsparser import CrisprmeArgumentParser
 from crisprme.crisprme import __version__
 from crisprme.utils import (
     CRISPRme_COMMANDS, 
+    CRISPRme_COMMANDS_ARGS,
     IUPAC_ALPHABET, 
     CRISPRme_DIRS,
     sigint_handler, 
     merge_annotation_files,
     check_directories_consistency,
-     exception_handler, 
-     parse_PAM_sequence_file,
+    exception_handler, 
+    parse_PAM_sequence_file,
 )
 from crisprme_location import CURRENT_WORKING_DIRECTORY, ORIGIN_PATH
 from crisprme_commands import CompleteSearch
 
 from typing import List, Optional
+from argparse import Namespace
 from time import time
 
 import multiprocessing
@@ -116,6 +118,7 @@ def get_parser() -> CrisprmeArgumentParser:
         metavar="NTHREADS",
         nargs="?",
         const=8,
+        dest="threads",
         help="Number of threads used by CRISPRme. Use 0 to autodetect the "
              "maximum number of available threads. Default: %(default)."
     )
@@ -314,6 +317,290 @@ def get_parser() -> CrisprmeArgumentParser:
     )
 
 
+def complete_search_input_check(
+    args: Namespace, parser: CrisprmeArgumentParser
+) -> None:
+    """Check arguments consistency for complete search CRISPRme command.
+
+    ...
+
+    Parameters
+    ----------
+    args : Namespace
+        Complete search input arguments 
+    parser : CrisprmeArgumentParser
+        Parsed input arguments
+    
+    Returns
+    -------
+    None
+    """
+
+    if not isinstance(args, Namespace):
+        exception_handler(
+            TypeError,
+            f"Exepcted {Namespace.__name__}, got {type(args).__name__}",
+            args.debug
+        )
+    if not isinstance(parser, CrisprmeArgumentParser):
+        exception_handler(
+            TypeError,
+            f"Expected {CrisprmeArgumentParser.__name__}, got {type(parser).__name__}",
+            args.debug
+        )
+    # check if only complete-search arguments have been given
+    if any(
+        [
+            a not in CRISPRme_COMMANDS[CRISPRme_COMMANDS[0]] for a in vars(args).keys()
+        ]
+    ):
+        # if found something, raise error
+        parser.error("Wrong arguments given to \"complete-search\" command")
+    # check base editing
+    if bool(args.be_window) and not args.be_nucleotide:
+        parser.error(
+            f"Unspecified base(s) editor to check within the specified window"
+        )
+    if bool(args.be_nucleotide) and not args.be_window:
+        parser.error(f"Unspecified base window to check for the input base")
+    # check base editor input check
+    base_start = 1
+    base_stop = 0
+    be_nucleotide = "_"
+    if args.be_window:
+        be_window = args.be_window
+        try:
+            base_start, base_stop = be_window.strip().split(",")
+            base_start = int(base_start)
+            base_stop = int(base_stop)
+        except:
+            parser.error("Wrong base editor window given")
+    if args.be_nucleotide:
+        be_nucleotide = args.be_nucleotide
+        for nt in be_nucleotide.strip().split(","):
+            if nt not in IUPAC_ALPHABET:
+                parser.error(f"Forbidden IUPAC character found ({nt})")
+    # check guide and sequence existence
+    if not args.guide_file and not args.sequence_guides:
+        parser.error(f"Missing both guides file and sequence file.")
+    if args.guide_file and args.sequence_guides:
+        parser.error(
+            "Only one argument between \"--guide\" and \"--sequence\" is allowed"
+        )
+    if args.guide_file:
+        guide_file = os.path.abspath(args.guide_file)
+    if not os.path.isfile(guide_file):
+        parser.error(f"Unable to locate {args.guide_file}")
+    useseqs = False
+    if args.sequence_guides:
+        sequence_guides = os.path.abspath(args.sequence_guides)
+        useseqs = True
+    if not os.path.isfile(sequence_guides):
+        parser.error(f"Unable to locate {args.sequence_guides}")
+    # check input genome
+    if not args.genome:
+        parser.error("Missing reference genome")
+    else:
+        genome = os.path.abspath(args.genome)
+        if not os.path.isdir(genome):
+            parser.error(f"Unable to locate {args.genome}")
+    # check VCF input file
+    variant = True
+    if args.vcf == "_":  # no VCF provided
+        variant = False
+    else:
+        vcf = os.path.abspath(args.vcf)
+        if not os.path.isfile(vcf):
+            parser.error(f"Unable to locate {args.vcf}")
+    # check functional annotation
+    if not args.annotation:
+        if args.verbose:
+            sys.stderr.write("WARNING: --annotation not used")
+        annotation = os.path.join(ORIGIN_PATH, "empty.txt")
+    else:
+        annotation = os.path.abspath(args.annotation)
+        if not os.path.isfile(annotation):
+            parser.error(f"Unable to locate {args.annotation}")
+        if args.personal_annotation:
+            personal_annotation = os.path.abspath(args.personal_annotation)
+            if not os.path.isfile(personal_annotation):
+                parser.error(f"Unable to locate {args.personal_annotation}")
+            # merge functional annotation and personal annotation files
+            annotation = merge_annotation_files(annotation, personal_annotation)
+    # check gene annotation input
+    if not args.gene_annotation:
+        gene_annotation = os.path.join(ORIGIN_PATH, "empty.txt")
+    else:
+        gene_annotation = os.path.abspath(args.gene_annotation)
+        if not os.path.isfile(gene_annotation):
+            parser.error(f"Unable to locate {args.gene_annotation}")
+    # check personal annotation input
+    if args.personal_annotation and not args.annotation:
+        personal_annotation = os.path.abspath(args.personal_annotation)
+        if not os.path.isfile(personal_annotation):
+            parser.error(f"Unable to locate {args.personal_annotation}")
+        # merge functional annotation and personal annotation files
+        annotation = merge_annotation_files(annotation, personal_annotation)
+    # check input PAM
+    if not args.pam:
+        parser.error("Missing PAM file")
+    else:
+        pam = os.path.abspath(args.pam)
+        if not os.path.isfile(pam):
+            parser.error(f"Unable to locate {args.pam}")
+    # check input data for variant search (check the existence of all files)
+    samples_file = os.path.join(ORIGIN_PATH, "empty.txt")  # use empty files by default
+    if variant and args.samples_file:
+        parser.error(
+            "Samples are required to perform CRISPRme search accounting for variants"
+        )
+    elif not variant and args.samples_file:
+        parser.error("Samples provided, but VCF is missing")
+    elif args.samples_file:
+        samples_file = os.path.abspath(args.samples_file)
+        if not os.path.isfile(samples_file):
+            parser.error(f"Unable to locate {args.samples_file}") 
+    # check input mismatches
+    if not args.mm:
+        parser.error("Missing number of mismatches")
+    else:
+        try:
+            mm = int(args.mm)
+        except ValueError as verr:
+            parser.error(
+                f"Forbidden number of mismatches provided ({args.mm})"
+            )
+        except Exception as e:
+            parser.error(
+                "A problem occurred while reading the number of mismatches"
+            )
+        if mm < 0:
+            parser.error(f"Forbidden number of mismatches given ({mm})")
+    # check input DNA bulges
+    if args.bdna != 0:
+        assert isinstance(args.bdna, int)
+        if args.bdna < 0:
+            parser.error(f"Forbidden number of DNA bulges given {args.bdna}")
+        bdna = args.bdna
+    # check input RNA bulges
+    if args.brna != 0:
+        assert isinstance(args.brna, int)
+        if args.brna < 0:
+            parser.error(f"Forbidden number of DNA bulges given {args.rdna}")
+        brna = args.brna
+    # set bmax to generate index as maximum value between DNA and RNA bulges
+    bmax = max(bdna, brna)
+    # check input for merge window
+    if args.merge != 3:
+        assert isinstance(args.merge, int)
+        if args.merge < 0:
+            parser.error(f"Forbidden merge threshold value ({args.merge})")
+        merge_thresh = args.merge
+    # TODO: maybe move output directory check on top
+    if not args.output_name:
+        parser.error("Missing results name")
+    else:
+        outname = args.output_name
+        outdir = os.path.join(
+            CURRENT_WORKING_DIRECTORY, CRISPRme_DIRS[1], outname
+        )
+        if not os.path.exists(outdir):  
+            # if the output directory does not exists, create it
+            os.makedirs(outdir)
+        # make sure that the results directory exists
+        if not os.path.isdir(outdir):
+            parser.error(f"Unable to locate {outdir}")
+    # recover PAM sequences from file
+    pam_seq, pam_length, pam_total_length, pam_start = parse_PAM_sequence_file(
+        pam, args.debug
+    )
+    # recover directories basename
+    ref_genome = os.path.basename(genome)
+    annotation_bname = os.path.basename(annotation)
+    nuclease = os.path.basename(pam).split(".")[0].split("-")[2]
+    # set search index
+    search_index = True if bmax != 0 else False
+    # set genome indexes
+    if variant:  # search accounting for variants
+        genome_index_list = []
+        try:
+            with open(vcf, mode="r") as handle:
+                for line in handle:
+                    line = line.strip()
+                    if line:
+                        if line[-1] == "/":
+                            line = line[:-1]
+                        vcf_bname = os.path.basename(line)
+                        genome_index_list.append(
+                            f"{pam_seq}_{bmax}_{ref_genome}+{vcf_bname}"
+                        )
+        except:
+            exception_handler(OSError, f"Unable to parse {vcf}", args.debug)
+        genome_index = ",".join(genome_index_list)
+        ref_comparison = True  # compare variant results with reference
+    else:  # search only on reference genome
+        genome_index = f"{pam_seq}_{bmax}_{ref_genome}"
+        ref_comparison = False  # no required comparison
+    guide_length = pam_total_length - pam_length  # compute guide length
+    # recover the guides from sequence file
+    if useseqs: 
+        guides = parse_guide_sequences_file(
+            sequence_guides, 
+            genome, 
+            pam_seq, 
+            pam_length, 
+            guide_length,
+            pam_start,
+            args.debug
+        )
+        # write guides to guides.txt
+        try:
+            with open(os.path.join(outdir, "guides.txt"), mode="w") as handle:
+                for guide in guides:
+                    handle.write(f"{guide}\n")
+        except OSError as oserr:
+            exception_handler(
+                OSError, f"Unable to write `guides.txt`", args.debug
+            )
+        finally:
+            handle.close()  # close out stream
+    # force empty mail value
+    mail_empty = "_"
+    if not useseqs:
+        # copy guides file to guides.txt
+        cmd = f"cp {guide_file} {os.path.join(outdir, 'guides.txt')}"
+        code = subprocess.call(cmd, shell=True)
+        if code != 0:
+            exception_handler(
+                subprocess.SubprocessError,
+                f"An error occurred while running {cmd}",
+                args.debug
+            )
+    guides = os.path.join(outdir, "guides.txt")  # assign guides file
+    # create complete-search object
+    complete_search = CompleteSearch(
+        args.threads,
+        args.verbose,
+        args.debug,
+        ref_genome, 
+        search_index, 
+        genome_index, 
+        guides,
+        pam_seq, 
+        bmax, 
+        mm, 
+        bdna, 
+        brna, 
+        annotation,
+        nuclease, 
+        ref_comparison, 
+        outname,
+        outdir
+    )
+    complete_search.write_params_file()  # write the selected input parameters
+    # return an object with carrying all the input arguments
+    return complete_search 
+
 
 def main(cmdline_args: Optional[List[str]] = None) -> None:
     """CRISPRme's main.
@@ -376,254 +663,255 @@ def main(cmdline_args: Optional[List[str]] = None) -> None:
             parser.error("\"--debug\" does not accept any positional argument")
         # complete-search argument check
         if crisprme_command == CRISPRme_COMMANDS[0]:
-            # check base editing
-            if bool(args.be_window) and not args.be_nucleotide:
-                parser.error(
-                    f"Unspecified base(s) editor to check within the specified window"
-                )
-            if bool(args.be_nucleotide) and not args.be_window:
-                parser.error(f"Unspecified base window to check for the input base")
-            # check base editor input check
-            base_start = 1
-            base_stop = 0
-            be_nucleotide = "_"
-            if args.be_window:
-                be_window = args.be_window
-                try:
-                    base_start, base_stop = be_window.strip().split(",")
-                    base_start = int(base_start)
-                    base_stop = int(base_stop)
-                except:
-                    parser.error("Wrong base editor window given")
-            if args.be_nucleotide:
-                be_nucleotide = args.be_nucleotide
-                for nt in be_nucleotide.strip.split(","):
-                    if nt not in IUPAC_ALPHABET:
-                        parser.error(f"Forbidden IUPAC character found ({nt})")
-            # check guide and sequence existence
-            if not args.guide_file and not args.sequence_guides:
-                parser.error(f"Missing both guides file and sequence file.")
-            if args.guide_file and args.sequence_guides:
-                parser.error(
-                    "Only one argument between \"--guide\" and \"--sequence\" is allowed"
-                )
-            if args.guide_file:
-                guide_file = os.path.abspath(args.guide_file)
-            if not os.path.isfile(guide_file):
-                parser.error(f"Unable to locate {args.guide_file}")
-            useseqs = False
-            if args.sequence_guides:
-                sequence_guides = os.path.abspath(args.sequence_guides)
-                useseqs = True
-            if not os.path.isfile(sequence_guides):
-                parser.error(f"Unable to locate {args.sequence_guides}")
-            # check input genome
-            if not args.genome:
-                parser.error("Missing reference genome")
-            else:
-                genome = os.path.abspath(args.genome)
-                if not os.path.isdir(genome):
-                    parser.error(f"Unable to locate {args.genome}")
-            # check VCF input file
-            variant = True
-            if args.vcf == "_":  # no VCF provided
-                variant = False
-            else:
-                vcf = os.path.abspath(args.vcf)
-                if not os.path.isfile(vcf):
-                    parser.error(f"Unable to locate {args.vcf}")
-            # check functional annotation
-            if not args.annotation:
-                if args.verbose:
-                    sys.stderr.write("WARNING: --annotation not used")
-                annotation = os.path.join(ORIGIN_PATH, "empty.txt")
-            else:
-                annotation = os.path.abspath(args.annotation)
-                if not os.path.isfile(annotation):
-                    parser.error(f"Unable to locate {args.annotation}")
-                if args.personal_annotation:
-                    personal_annotation = os.path.abspath(args.personal_annotation)
-                    if not os.path.isfile(personal_annotation):
-                        parser.error(f"Unable to locate {args.personal_annotation}")
-                    # merge functional annotation and personal annotation files
-                    annotation = merge_annotation_files(
-                        annotation, personal_annotation
-                    )
-            # check gene annotation input
-            if not args.gene_annotation:
-                gene_annotation = os.path.join(ORIGIN_PATH, "empty.txt")
-            else:
-                gene_annotation = os.path.abspath(args.gene_annotation)
-                if not os.path.isfile(gene_annotation):
-                    parser.error(f"Unable to locate {args.gene_annotation}")
-            # check personal annotation input
-            if args.personal_annotation and not args.annotation:
-                personal_annotation = os.path.abspath(args.personal_annotation)
-                if not os.path.isfile(personal_annotation):
-                    parser.error(f"Unable to locate {args.personal_annotation}")
-                # merge functional annotation and personal annotation files
-                annotation = merge_annotation_files(
-                    annotation, personal_annotation
-                )
-            # check input PAM
-            if not args.pam:
-                parser.error("Missing PAM file")
-            else:
-                pam = os.path.abspath(args.pam)
-                if not os.path.isfile(pam):
-                    parser.error(f"Unable to locate {args.pam}")
-            # check input data for variant search (check the existence of all files)
-            samples_file = os.path.join(ORIGIN_PATH, "empty.txt")  # use empty files by default
-            if variant and args.samples_file:
-                parser.error(
-                    "Samples are required to perform CRISPRme search accounting for variants"
-                )
-            elif not variant and args.samples_file:
-                parser.error("Samples provided, but VCF is missing")
-            elif args.samples_file:
-                samples_file = os.path.abspath(args.samples_file)
-                if not os.path.isfile(samples_file):
-                    parser.error(f"Unable to locate {args.samples_file}") 
-            # check input mismatches
-            if not args.mm:
-                parser.error("Missing number of mismatches")
-            else:
-                try:
-                    mm = int(args.mm)
-                except ValueError as verr:
-                    parser.error(
-                        f"Forbidden number of mismatches provided ({args.mm})"
-                    )
-                except Exception as e:
-                    parser.error(
-                        "A problem occurred while reading the number of mismatches"
-                    )
-                if mm < 0:
-                    parser.error(f"Forbidden number of mismatches given ({mm})")
-            # check input DNA bulges
-            if args.bdna != 0:
-                assert isinstance(args.bdna, int)
-                if args.bdna < 0:
-                    parser.error(f"Forbidden number of DNA bulges given {args.bdna}")
-                bdna = args.bdna
-            # check input RNA bulges
-            if args.brna != 0:
-                assert isinstance(args.brna, int)
-                if args.brna < 0:
-                    parser.error(f"Forbidden number of DNA bulges given {args.rdna}")
-                brna = args.brna
-            # set bmax to generate index as maximum value between DNA and RNA bulges
-            bmax = max(bdna, brna)
-            # check input for merge window
-            if args.merge != 3:
-                assert isinstance(args.merge, int)
-                if args.merge < 0:
-                    parser.error(f"Forbidden merge threshold value ({args.merge})")
-                merge_thresh = args.merge
-            # TODO: maybe move output directory check on top
-            if not args.output_name:
-                parser.error("Missing results name")
-            else:
-                outname = args.output_name
-                outdir = os.path.join(
-                    CURRENT_WORKING_DIRECTORY, CRISPRme_DIRS[1], outname
-                )
-                if not os.path.exists(outdir):  
-                    # if the output directory does not exists, create it
-                    os.makedirs(outdir)
-                # make sure that the results directory exists
-                if not os.path.isdir(outdir):
-                    parser.error(f"Unable to locate {outdir}")
-            # recover PAM sequences from file
-            pam_seq, pam_length, pam_total_length, pam_start = parse_PAM_sequence_file(
-                pam, args.debug
-            )
-            # recover directories basename
-            ref_genome = os.path.basename(genome)
-            annotation_bname = os.path.basename(annotation)
-            nuclease = os.path.basename(pam).split(".")[0].split("-")[2]
-            # set search index
-            search_index = True if bmax != 0 else False
-            # set genome indexes
-            if variant:  # search accounting for variants
-                genome_index_list = []
-                try:
-                    with open(vcf, mode="r") as handle:
-                        for line in handle:
-                            line = line.strip()
-                            if line:
-                                if line[-1] == "/":
-                                    line = line[:-1]
-                                vcf_bname = os.path.basename(line)
-                                genome_index_list.append(
-                                    f"{pam_seq}_{bmax}_{ref_genome}+{vcf_bname}"
-                                )
-                except:
-                    exception_handler(OSError, f"Unable to parse {vcf}", args.debug)
-                genome_index = ",".join(genome_index_list)
-                ref_comparison = True  # compare variant results with reference
-            else:  # search only on reference genome
-                genome_index = f"{pam_seq}_{bmax}_{ref_genome}"
-                ref_comparison = False  # no required comparison
-            # create complete-search object
-            complete_search = CompleteSearch(
-                ref_genome, 
-                search_index, 
-                genome_index, 
-                pam_seq, 
-                bmax, 
-                mm, 
-                bdna, 
-                brna, 
-                annotation,
-                nuclease, 
-                ref_comparison, 
-                outdir
-            )
-            # write Params.txt file
-            complete_search.write_params_file()
-            guide_length = pam_total_length - pam_length  # compute guide length
-            # recover the guides from sequence file
-            if useseqs: 
-                guides = parse_guide_sequences_file(
-                    sequence_guides, 
-                    genome, 
-                    pam_seq, 
-                    pam_length, 
-                    guide_length,
-                    pam_start,
-                    args.debug
-                )
-                # write guides to guides.txt
-                try:
-                    with open(
-                        os.path.join(outdir, "guides.txt"), mode="w"
-                    ) as handle:
-                        for guide in guides:
-                            handle.write(f"{guide}\n")
-                except OSError as oserr:
-                    exception_handler(
-                        OSError, f"Unable to write `guides.txt`", args.debug
-                    )
-                finally:
-                    handle.close()  # close out stream
-            # force empty mail value
-            mail_empty = "_"
-            if not useseqs:
-                # copy guides file to guides.txt
-                cmd = f"cp {guide_file} {os.path.join(outdir, 'guides.txt')}"
-                code = subprocess.call(cmd, shell=True)
-                if code != 0:
-                    exception_handler(
-                        subprocess.SubprocessError,
-                        f"An error occurred while running {cmd}",
-                        args.debug
-                    )
-            # job start message to stderr
-            sys.stderr.write(
-                f"Launching job {outname}. Stdout is redirected to log_verbose.txt. "
-                "Stderr is redirected to log_error.txt"
-            )
+            workflow = complete_search_input_check(args, parser)
+            # # check base editing
+            # if bool(args.be_window) and not args.be_nucleotide:
+            #     parser.error(
+            #         f"Unspecified base(s) editor to check within the specified window"
+            #     )
+            # if bool(args.be_nucleotide) and not args.be_window:
+            #     parser.error(f"Unspecified base window to check for the input base")
+            # # check base editor input check
+            # base_start = 1
+            # base_stop = 0
+            # be_nucleotide = "_"
+            # if args.be_window:
+            #     be_window = args.be_window
+            #     try:
+            #         base_start, base_stop = be_window.strip().split(",")
+            #         base_start = int(base_start)
+            #         base_stop = int(base_stop)
+            #     except:
+            #         parser.error("Wrong base editor window given")
+            # if args.be_nucleotide:
+            #     be_nucleotide = args.be_nucleotide
+            #     for nt in be_nucleotide.strip.split(","):
+            #         if nt not in IUPAC_ALPHABET:
+            #             parser.error(f"Forbidden IUPAC character found ({nt})")
+            # # check guide and sequence existence
+            # if not args.guide_file and not args.sequence_guides:
+            #     parser.error(f"Missing both guides file and sequence file.")
+            # if args.guide_file and args.sequence_guides:
+            #     parser.error(
+            #         "Only one argument between \"--guide\" and \"--sequence\" is allowed"
+            #     )
+            # if args.guide_file:
+            #     guide_file = os.path.abspath(args.guide_file)
+            # if not os.path.isfile(guide_file):
+            #     parser.error(f"Unable to locate {args.guide_file}")
+            # useseqs = False
+            # if args.sequence_guides:
+            #     sequence_guides = os.path.abspath(args.sequence_guides)
+            #     useseqs = True
+            # if not os.path.isfile(sequence_guides):
+            #     parser.error(f"Unable to locate {args.sequence_guides}")
+            # # check input genome
+            # if not args.genome:
+            #     parser.error("Missing reference genome")
+            # else:
+            #     genome = os.path.abspath(args.genome)
+            #     if not os.path.isdir(genome):
+            #         parser.error(f"Unable to locate {args.genome}")
+            # # check VCF input file
+            # variant = True
+            # if args.vcf == "_":  # no VCF provided
+            #     variant = False
+            # else:
+            #     vcf = os.path.abspath(args.vcf)
+            #     if not os.path.isfile(vcf):
+            #         parser.error(f"Unable to locate {args.vcf}")
+            # # check functional annotation
+            # if not args.annotation:
+            #     if args.verbose:
+            #         sys.stderr.write("WARNING: --annotation not used")
+            #     annotation = os.path.join(ORIGIN_PATH, "empty.txt")
+            # else:
+            #     annotation = os.path.abspath(args.annotation)
+            #     if not os.path.isfile(annotation):
+            #         parser.error(f"Unable to locate {args.annotation}")
+            #     if args.personal_annotation:
+            #         personal_annotation = os.path.abspath(args.personal_annotation)
+            #         if not os.path.isfile(personal_annotation):
+            #             parser.error(f"Unable to locate {args.personal_annotation}")
+            #         # merge functional annotation and personal annotation files
+            #         annotation = merge_annotation_files(
+            #             annotation, personal_annotation
+            #         )
+            # # check gene annotation input
+            # if not args.gene_annotation:
+            #     gene_annotation = os.path.join(ORIGIN_PATH, "empty.txt")
+            # else:
+            #     gene_annotation = os.path.abspath(args.gene_annotation)
+            #     if not os.path.isfile(gene_annotation):
+            #         parser.error(f"Unable to locate {args.gene_annotation}")
+            # # check personal annotation input
+            # if args.personal_annotation and not args.annotation:
+            #     personal_annotation = os.path.abspath(args.personal_annotation)
+            #     if not os.path.isfile(personal_annotation):
+            #         parser.error(f"Unable to locate {args.personal_annotation}")
+            #     # merge functional annotation and personal annotation files
+            #     annotation = merge_annotation_files(
+            #         annotation, personal_annotation
+            #     )
+            # # check input PAM
+            # if not args.pam:
+            #     parser.error("Missing PAM file")
+            # else:
+            #     pam = os.path.abspath(args.pam)
+            #     if not os.path.isfile(pam):
+            #         parser.error(f"Unable to locate {args.pam}")
+            # # check input data for variant search (check the existence of all files)
+            # samples_file = os.path.join(ORIGIN_PATH, "empty.txt")  # use empty files by default
+            # if variant and args.samples_file:
+            #     parser.error(
+            #         "Samples are required to perform CRISPRme search accounting for variants"
+            #     )
+            # elif not variant and args.samples_file:
+            #     parser.error("Samples provided, but VCF is missing")
+            # elif args.samples_file:
+            #     samples_file = os.path.abspath(args.samples_file)
+            #     if not os.path.isfile(samples_file):
+            #         parser.error(f"Unable to locate {args.samples_file}") 
+            # # check input mismatches
+            # if not args.mm:
+            #     parser.error("Missing number of mismatches")
+            # else:
+            #     try:
+            #         mm = int(args.mm)
+            #     except ValueError as verr:
+            #         parser.error(
+            #             f"Forbidden number of mismatches provided ({args.mm})"
+            #         )
+            #     except Exception as e:
+            #         parser.error(
+            #             "A problem occurred while reading the number of mismatches"
+            #         )
+            #     if mm < 0:
+            #         parser.error(f"Forbidden number of mismatches given ({mm})")
+            # # check input DNA bulges
+            # if args.bdna != 0:
+            #     assert isinstance(args.bdna, int)
+            #     if args.bdna < 0:
+            #         parser.error(f"Forbidden number of DNA bulges given {args.bdna}")
+            #     bdna = args.bdna
+            # # check input RNA bulges
+            # if args.brna != 0:
+            #     assert isinstance(args.brna, int)
+            #     if args.brna < 0:
+            #         parser.error(f"Forbidden number of DNA bulges given {args.rdna}")
+            #     brna = args.brna
+            # # set bmax to generate index as maximum value between DNA and RNA bulges
+            # bmax = max(bdna, brna)
+            # # check input for merge window
+            # if args.merge != 3:
+            #     assert isinstance(args.merge, int)
+            #     if args.merge < 0:
+            #         parser.error(f"Forbidden merge threshold value ({args.merge})")
+            #     merge_thresh = args.merge
+            # # TODO: maybe move output directory check on top
+            # if not args.output_name:
+            #     parser.error("Missing results name")
+            # else:
+            #     outname = args.output_name
+            #     outdir = os.path.join(
+            #         CURRENT_WORKING_DIRECTORY, CRISPRme_DIRS[1], outname
+            #     )
+            #     if not os.path.exists(outdir):  
+            #         # if the output directory does not exists, create it
+            #         os.makedirs(outdir)
+            #     # make sure that the results directory exists
+            #     if not os.path.isdir(outdir):
+            #         parser.error(f"Unable to locate {outdir}")
+            # # recover PAM sequences from file
+            # pam_seq, pam_length, pam_total_length, pam_start = parse_PAM_sequence_file(
+            #     pam, args.debug
+            # )
+            # # recover directories basename
+            # ref_genome = os.path.basename(genome)
+            # annotation_bname = os.path.basename(annotation)
+            # nuclease = os.path.basename(pam).split(".")[0].split("-")[2]
+            # # set search index
+            # search_index = True if bmax != 0 else False
+            # # set genome indexes
+            # if variant:  # search accounting for variants
+            #     genome_index_list = []
+            #     try:
+            #         with open(vcf, mode="r") as handle:
+            #             for line in handle:
+            #                 line = line.strip()
+            #                 if line:
+            #                     if line[-1] == "/":
+            #                         line = line[:-1]
+            #                     vcf_bname = os.path.basename(line)
+            #                     genome_index_list.append(
+            #                         f"{pam_seq}_{bmax}_{ref_genome}+{vcf_bname}"
+            #                     )
+            #     except:
+            #         exception_handler(OSError, f"Unable to parse {vcf}", args.debug)
+            #     genome_index = ",".join(genome_index_list)
+            #     ref_comparison = True  # compare variant results with reference
+            # else:  # search only on reference genome
+            #     genome_index = f"{pam_seq}_{bmax}_{ref_genome}"
+            #     ref_comparison = False  # no required comparison
+            # # create complete-search object
+            # complete_search = CompleteSearch(
+            #     ref_genome, 
+            #     search_index, 
+            #     genome_index, 
+            #     pam_seq, 
+            #     bmax, 
+            #     mm, 
+            #     bdna, 
+            #     brna, 
+            #     annotation,
+            #     nuclease, 
+            #     ref_comparison, 
+            #     outdir
+            # )
+            # # write Params.txt file
+            # complete_search.write_params_file()
+            # guide_length = pam_total_length - pam_length  # compute guide length
+            # # recover the guides from sequence file
+            # if useseqs: 
+            #     guides = parse_guide_sequences_file(
+            #         sequence_guides, 
+            #         genome, 
+            #         pam_seq, 
+            #         pam_length, 
+            #         guide_length,
+            #         pam_start,
+            #         args.debug
+            #     )
+            #     # write guides to guides.txt
+            #     try:
+            #         with open(
+            #             os.path.join(outdir, "guides.txt"), mode="w"
+            #         ) as handle:
+            #             for guide in guides:
+            #                 handle.write(f"{guide}\n")
+            #     except OSError as oserr:
+            #         exception_handler(
+            #             OSError, f"Unable to write `guides.txt`", args.debug
+            #         )
+            #     finally:
+            #         handle.close()  # close out stream
+            # # force empty mail value
+            # mail_empty = "_"
+            # if not useseqs:
+            #     # copy guides file to guides.txt
+            #     cmd = f"cp {guide_file} {os.path.join(outdir, 'guides.txt')}"
+            #     code = subprocess.call(cmd, shell=True)
+            #     if code != 0:
+            #         exception_handler(
+            #             subprocess.SubprocessError,
+            #             f"An error occurred while running {cmd}",
+            #             args.debug
+            #         )
+            # # job start message to stderr
+            # sys.stderr.write(
+            #     f"Launching job {outname}. Stdout is redirected to log_verbose.txt. "
+            #     "Stderr is redirected to log_error.txt"
+            # )
             # start complete search
             # TODO: main script
         if args.verbose:

@@ -28,6 +28,29 @@ CRISPRme_COMMANDS = [
 CRISPRme_DIRS = [
     "Genomes", "Results", "Dictionaries", "VCFs", "Annotations", "PAMs", "samplesIDs"
 ]
+CRISPRme_COMMANDS_ARGS = {
+    "complete-search": [
+        "threads", 
+        "verbose", 
+        "debug", 
+        "genome", 
+        "vcf", 
+        "guide_file", 
+        "sequence_guides",
+        "pam",
+        "be_window",
+        "be_nucleotide",
+        "annotation",
+        "personal_annotation",
+        "samples_file",
+        "gene_annotation",
+        "mm",
+        "bdna",
+        "brna",
+        "merge",
+        "output_name"
+    ]
+}
 IUPAC_ALPHABET = {
     "A",
     "T",
