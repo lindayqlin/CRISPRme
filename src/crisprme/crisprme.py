@@ -39,6 +39,6 @@ def complete_search(args: CompleteSearch) -> None:
     try:
         # TODO: create log_verbose.txt and log_error.txt
         # TODO: launch crisprme complete-search function
-        pass
+        print("Running CRISPRme...")
     except:
         pass

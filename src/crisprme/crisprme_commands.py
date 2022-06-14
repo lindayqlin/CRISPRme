@@ -108,7 +108,7 @@ class CompleteSearch(CRISPRmeCommand):
         outname: str,
         outdir: str,
     ) -> None:
-        super.__init__(threads, verbose, debug)  # initialize parent class
+        super().__init__(threads, verbose, debug)  # initialize parent class
         self._ref_genome = ref_genome
         self._search_index = search_index
         self._genome_index = genome_index

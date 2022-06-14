@@ -2,8 +2,6 @@
 """
 
 
-from crisprme_location import CURRENT_WORKING_DIRECTORY
-
 from typing import List, NoReturn, Optional, Tuple
 from colorama import Fore, init
 from Bio.Seq import Seq
@@ -18,6 +16,13 @@ import os
 
 # ------------------------------------------------------------------------------
 # constant variables 
+# SCRIPT_PATH = os.path.dirname(os.path.abspath(__file__))
+CONDA_PATH = "opt/crisprme/src/crisprme/PostProcess"
+ORIGIN_PATH = os.path.dirname(
+    os.path.join(os.path.abspath(__file__), "../..")
+)[:-3] + CONDA_PATH
+# WEB_PATH = ORIGIN_PATH[:-3] + "opt/crisprme"
+CURRENT_WORKING_DIRECTORY = os.path.join(os.getcwd(), "../..")
 CRISPRme_COMMANDS = [
     "complete-search", 
     "gnomAD-converter", 
@@ -31,6 +36,7 @@ CRISPRme_DIRS = [
 CRISPRme_COMMANDS_ARGS = {
     "complete-search": [
         "threads", 
+        "command",
         "verbose", 
         "debug", 
         "genome", 
