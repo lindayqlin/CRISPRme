@@ -224,6 +224,8 @@ class GnomADConverter(CRISPRmeCommand):
 
     Attributes
     ----------
+    _vcf : str
+    _samples : str
 
     Methods
     -------
@@ -249,4 +251,57 @@ class GnomADConverter(CRISPRmeCommand):
     @property
     def samples(self):
         return self._get_samples()
+
+
+class TargetsIntegration(CRISPRmeCommand):
+    """Targets integration command class. The class extends `CRISPRmeCommand` 
+    class.
+
+    ...
+
+    Attributes
+    ----------
+    _vcf : str
+    _samples : str
+
+    Methods
+    -----
+    """
+
+    def __init__(
+        self, 
+        threads: int, 
+        verbose: bool, 
+        debug: bool, 
+        targets_file: str, 
+        empirical_data: str, 
+        outdir: str
+    ) -> None:
+        super().__init__(threads, verbose, debug)
+        self._targets_file = targets_file
+        self._empirical_data = empirical_data
+        self._outdir = outdir
+
+    def _get_targets_file(self):
+        return self._targets_file
+
+    @property
+    def targets_file(self):
+        return self._get_targets_file()
+
+    def _get_empirical_data(self):
+        return self._empirical_data
+    
+    @property
+    def empirical_data(self):
+        return self._get_empirical_data()
+
+    def _get_outdir(self):
+        return self._outdir
+    
+    @property
+    def outdir(self):
+        return self._get_outdir()
+        
+
         

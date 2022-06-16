@@ -55,23 +55,25 @@ See https://github.com/pinellolab/CRISPRme for the full documentation.
 
 
 from crisprme.crisprme_argsparser import CrisprmeArgumentParser 
-from crisprme.crisprme import __version__, complete_search
+from crisprme.crisprme import (
+    __version__, complete_search, gnomAD_converter, targets_integration
+)
 from crisprme.utils import (
     CURRENT_WORKING_DIRECTORY,
     ORIGIN_PATH,
     CRISPRme_COMMANDS, 
-    CRISPRme_COMMANDS_ARGS,
     IUPAC_ALPHABET, 
     CRISPRme_DIRS,
     sigint_handler, 
     merge_annotation_files,
     check_directories_consistency,
+    check_command_args,
     exception_handler, 
     parse_PAM_sequence_file,
     parse_guide_sequences_file
 )
 from crisprme.crisprme_commands import (
-    CompleteSearch, GnomADConverter
+    CompleteSearch, GnomADConverter, TargetsIntegration
 )
 
 from typing import List, Optional
@@ -158,7 +160,7 @@ def get_parser() -> CrisprmeArgumentParser:
     )
     group.add_argument(
         "-v",
-        "--vcf",
+        "--vcf-file",
         type=str, 
         nargs="?",
         default="_",
@@ -300,23 +302,50 @@ def get_parser() -> CrisprmeArgumentParser:
     # gnomAD-converter arguments
     group = parser.add_argument_group("gnomAD-converter options")
     group.add_argument(
-        "-v",
-        "--vcf",
+        "--vcf-dir",
         type=str,
         nargs="?",
         default="",
         metavar="GnomAD VCF",
-        dest="vcf",
+        dest="vcf_dir",
         help="Directory containing the gnomADv3.1 VCFs to convert."
     )
     group.add_argument(
-        "-s",
-        "--samples",
+        "--samples-file",
         type=str,
         nargs="?",
         default="",
-        dest="samples",
+        dest="samples_file_gnomAD",
         help="File containing sample IDs to link samples to gnomAD variants."
+    )
+    # targets-integration arguments
+    group = parser.add_argument_group("targets-integration options")
+    group.add_argument(
+        "--targets",
+        type=str,
+        nargs="?",
+        default="",
+        metavar="TARGETS-FILE",
+        dest="targets_file",
+        help="Results filename to use during panel creation."
+    )
+    group.add_argument(
+        "--empirical-data",
+        type=str,
+        nargs="?",
+        default="",
+        metavar="EMPIRICAL-DATA",
+        dest="empirical_data",
+        help="File containing the empirical data to assess in-silico targets."
+    )
+    group.add_argument(
+        "--outdir",
+        type=str,
+        nargs="?",
+        default=os.getcwd(),
+        metavar="OUTDIR",
+        dest="outdir",
+        help="Output folder containing the final results."
     )
     return parser
 
@@ -353,12 +382,7 @@ def complete_search_input_check(
             args.debug
         )
     # check if only complete-search arguments have been given
-    if any(
-        [
-            a not in CRISPRme_COMMANDS_ARGS[CRISPRme_COMMANDS[0]] 
-            for a in vars(args).keys()
-        ]
-    ):
+    if check_command_args(CRISPRme_COMMANDS[0], args):
         # if found something, raise error
         parser.error("Wrong arguments given to \"complete-search\" command")
     # check base editing
@@ -639,32 +663,86 @@ def gnomAD_converter_input_check(
             args.debug
         )
     # check if only gnomAD-converter arguments have been given
-    if any(
-        [
-            a not in CRISPRme_COMMANDS_ARGS[CRISPRme_COMMANDS[1]] 
-            for a in vars(args).keys()
-        ]
-    ):
+    if check_command_args(CRISPRme_COMMANDS[1], args):
         # if found something, raise error
-        parser.error("Wrong arguments given to \"complete-search\" command")  
+        parser.error("Wrong arguments given to \"gnomAD-converter\" command")  
     # check gnomAD VCF directory
-    if not args.vcf:
+    if not args.vcf_dir:
         parser.error("Missing gnomAD VCF location.")
     else:
-        vcf = os.path.abspath(args.vcf)
+        vcf = os.path.abspath(args.vcf_dir)
         if not os.path.isdir(vcf):
-            parser.error(f"Unable to locate {args.vcf}")
-    if not args.samples:
+            parser.error(f"Unable to locate {args.vcf_dir}")
+    if not args.samples_file_gnomAD:
         parser.error("Missing samples IDs file")
     else:
-        samples_file = os.path.abspath(args.samples)
-        if not os.path.isfile(samples_file):
-            parser.error(f"Unable to locate {args.samples}")
+        samples_file_gnomAD = os.path.abspath(args.samples_file_gnomAD)
+        if not os.path.isfile(samples_file_gnomAD):
+            parser.error(f"Unable to locate {args.samples_file_gnomAD}")
     # create gnomAD-converter object
     gnomad_converter = GnomADConverter(
-        args.threads, args.verbose, args.debug, vcf, samples_file
+        args.threads, args.verbose, args.debug, vcf, samples_file_gnomAD
     )
     return gnomad_converter
+
+
+def targets_integration_input_check(
+    args: Namespace, parser: CrisprmeArgumentParser
+) -> None:
+    """Check arguments consistency for targets integration.
+
+    ...
+
+    Parameters
+    ----------
+    args : Namespace
+        targets-integration input arguments
+    parser : CrisprmeArgumentParser
+        Parsed input arguments
+
+    Returns
+    -------
+    None
+    """
+
+    if not isinstance(args, Namespace):
+        exception_handler(
+            TypeError,
+            f"Expected {Namespace.__name__}, got {type(args).__name__}",
+            args.debug
+        )
+    if not isinstance(parser, CrisprmeArgumentParser):
+        exception_handler(
+            TypeError,
+            f"Expected {CrisprmeArgumentParser.__name__}, got {type(parser).__name__}",
+            args.debug
+        )
+    # check if only targets-integration arguments have been given
+    if check_command_args(CRISPRme_COMMANDS[2], args):
+        # if found something, raise error
+        parser.error("Wrong arguments given to \"gnomAD-converter\" command")  
+    if not args.targets_file:
+        parser.error("Missing targets file.")
+    else:
+        targets_file = os.path.abspath(args.targets_file)
+        if not os.path.isfile(targets_file):
+            parser.error(f"Unable to locate {args.targets_file}")
+    if not args.empirical_data:
+        parser.error(f"Missing empirical data")
+    else:
+        empirical_data = os.path.abspath(args.empirical_data)
+        if not os.path.isfile(empirical_data):
+            parser.error(f"Unable to locate {args.empirical_data}")
+    outdir = os.path.abspath(args.outdir)
+    if not os.path.isdir(outdir):
+        parser.error(f"Unable to locate {args.outdir}")
+    # create targets-integration object
+    targets_integration = TargetsIntegration(
+        args.threads, args.verbose, args.debug, targets_file, empirical_data, outdir
+    )
+    return targets_integration
+
+
 
 
 def main(cmdline_args: Optional[List[str]] = None) -> None:
@@ -708,6 +786,10 @@ def main(cmdline_args: Optional[List[str]] = None) -> None:
                     "Forbidden second argument. Run \"crisprme --help\" to see "
                     "usage"
                 )
+        # check if some arg has been provided
+        if not cmdline_args[1:]:
+            parser.error(f"No argument given to {crisprme_command}")
+        # parse command line args
         args = parser.parse_args(cmdline_args)
         if args.verbose:
             sys.stderr.write("Parsing command-line arguments...") 
@@ -732,12 +814,18 @@ def main(cmdline_args: Optional[List[str]] = None) -> None:
         if crisprme_command == CRISPRme_COMMANDS[0]:  # complete-search
             workflow = complete_search_input_check(args, parser)
         elif crisprme_command == CRISPRme_COMMANDS[1]:  # gnomAD-converter
-            pass
+            workflow = gnomAD_converter_input_check(args, parser)
+        elif crisprme_command == CRISPRme_COMMANDS[2]:  # targets-integration
+            workflow = targets_integration_input_check(args, parser)
         if args.verbose:
             sys.stderr.write("Arguments parsing finished.") 
         # select the command to execute
         if isinstance(workflow, CompleteSearch):
             complete_search(workflow)
+        elif isinstance(workflow, GnomADConverter):
+            gnomAD_converter(workflow)
+        elif isinstance(workflow, TargetsIntegration):
+            targets_integration(workflow)
         else:
             # uknown command given, however we should never go here
             exception_handler(

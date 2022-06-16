@@ -2,6 +2,7 @@
 """
 
 
+from argparse import Namespace
 from typing import List, NoReturn, Optional, Tuple
 from colorama import Fore, init
 from Bio.Seq import Seq
@@ -33,38 +34,6 @@ CRISPRme_COMMANDS = [
 CRISPRme_DIRS = [
     "Genomes", "Results", "Dictionaries", "VCFs", "Annotations", "PAMs", "samplesIDs"
 ]
-CRISPRme_COMMANDS_ARGS = {
-    "complete-search": [
-        "threads", 
-        "command",
-        "verbose", 
-        "debug", 
-        "genome", 
-        "vcf", 
-        "guide_file", 
-        "sequence_guides",
-        "pam",
-        "be_window",
-        "be_nucleotide",
-        "annotation",
-        "personal_annotation",
-        "samples_file",
-        "gene_annotation",
-        "mm",
-        "bdna",
-        "brna",
-        "merge",
-        "output_name",
-    ],
-    "gnomAD-converter": [
-        "threads",
-        "command",
-        "verbose",
-        "debug",
-        "vcf",
-        "samples",
-    ],
-}
 IUPAC_ALPHABET = {
     "A",
     "T",
@@ -181,6 +150,66 @@ def check_directories_consistency(debug: bool) -> None:
                     f"Directory {d} is missing. CRISPRme was unable to create it.",
                     debug
                 )
+
+
+def check_command_args(command: str, args: Namespace) -> bool:
+    if command not in CRISPRme_COMMANDS:
+        exception_handler(
+            ValueError,
+            f"Forbidden CRISPRme command found ({command})",
+            True  # always trace this kind of errors
+        )
+    # check arguments consistency for each command
+    args_dict = vars(args)
+    if command != CRISPRme_COMMANDS[0]:  # complete-search
+        # make sure that only complete-search has such args initialized
+        if args_dict["genome"] != os.path.join(
+            CURRENT_WORKING_DIRECTORY, "Genomes"
+        ):
+            return True
+        if args_dict["vcf"] != "_":
+            return True
+        if bool(args_dict["sequence_guides"]):
+            return True
+        if bool(args_dict["pam"]):
+            return True
+        if bool(args_dict["be_window"]):
+            return True
+        if bool(args_dict["be_nucleotide"]):
+            return True
+        if bool(args_dict["annotation"]):
+            return True
+        if bool(args_dict["personal_annotation"]):
+            return True
+        if bool(args_dict["samples_file"]):
+            return True
+        if bool(args_dict["gene_annotation"]):
+            return True
+        if bool(args_dict["mm"]):
+            return True
+        if args_dict["bdna"] != 0:
+            return True
+        if args_dict["brna"] != 0:
+            return True
+        if args_dict["merge"] != 3:
+            return True
+        if bool(args_dict["output_name"]):
+            return True
+    if command != CRISPRme_COMMANDS[1]:  # gnomAD-converter
+        # make sure that only gnomAD-converter has such args initialized
+        if bool(args_dict["vcf_dir"]):
+            return True
+        if bool(args_dict["samples_file_gnomAD"]):
+            return True
+    if command != CRISPRme_COMMANDS[2]:  # targets-integration
+        # make sure that only targets-integration has such args initialized
+        if bool(args_dict["targets_file"]):
+            return True
+        if bool(args_dict["empirical_data"]):
+            return True
+        if args_dict["outdir"] != os.getcwd():
+            return True
+    return False
 
 
 def merge_annotation_files(
