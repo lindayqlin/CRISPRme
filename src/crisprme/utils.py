@@ -209,6 +209,10 @@ def check_command_args(command: str, args: Namespace) -> bool:
             return True
         if args_dict["outdir"] != os.getcwd():
             return True
+    if command != CRISPRme_COMMANDS[3]:  # web-interface
+        # make sure that only web-interface has such args initialized
+        if args_dict["help_web"]:
+            return True
     return False
 
 

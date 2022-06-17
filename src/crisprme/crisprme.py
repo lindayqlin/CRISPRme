@@ -2,7 +2,7 @@
 """
 
 from crisprme.crisprme_commands import (
-    CompleteSearch, GnomADConverter, TargetsIntegration
+    CompleteSearch, GnomADConverter, TargetsIntegration, WebInterface
 )
 from crisprme.utils import exception_handler
 
@@ -13,7 +13,7 @@ __version__ = "2.1.0"
 
 
 def complete_search(args: CompleteSearch) -> None:
-    """launch CRISPRme complete search.
+    """Launch CRISPRme complete search.
 
     ...
 
@@ -47,7 +47,7 @@ def complete_search(args: CompleteSearch) -> None:
 
 
 def gnomAD_converter(args: GnomADConverter) -> None:
-    """launch CRISPRme gnomAD converter command.
+    """Launch CRISPRme gnomAD converter command.
 
     ...
 
@@ -76,7 +76,7 @@ def gnomAD_converter(args: GnomADConverter) -> None:
 
 
 def targets_integration(args: TargetsIntegration) -> None:
-    """launch CRISPRme targets integration command.
+    """Launch CRISPRme targets integration command.
 
     ...
 
@@ -100,5 +100,34 @@ def targets_integration(args: TargetsIntegration) -> None:
     sys.stderr.write("Launching Targets integration")
     try:
         print("Running targets integration")
+    except:
+        pass
+
+
+def web_interface(args: WebInterface) -> None:
+    """Launch CRISPRme web interface command.
+
+    ...
+
+    Parameters
+    ----------
+    args : WebInterface
+        TargetsIntegration input arguments
+
+    Returns
+    -------
+    None
+    """
+
+    if not isinstance(args, WebInterface):
+        exception_handler(
+            TypeError,
+            f"Expected {WebInterface.__name__}, got {type(args).__name__}",
+            args.debug
+        )
+    # job start message
+    sys.stderr.write("Starting CRISPRme web interface")
+    try:
+        print("Running crisprme web interface")
     except:
         pass

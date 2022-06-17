@@ -304,4 +304,29 @@ class TargetsIntegration(CRISPRmeCommand):
         return self._get_outdir()
         
 
-        
+class WebInterface(CRISPRmeCommand):
+    """Targets integration command class. The class extends `CRISPRmeCommand` 
+    class.
+
+    ...
+
+    Attributes
+    ----------
+    help_web : bool
+    
+    Methods
+    -----
+    """
+    
+    def __init__(
+        self, threads: int, verbose: bool, debug: bool, help_web: bool
+    ) -> None:
+        super().__init__(threads, verbose, debug)
+        self._help_web = help_web
+    
+    def _get_help_web(self):
+        return self._help_web
+
+    @property
+    def help_web(self):
+        return self._get_help_web()

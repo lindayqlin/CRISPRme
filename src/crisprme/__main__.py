@@ -54,9 +54,14 @@ See https://github.com/pinellolab/CRISPRme for the full documentation.
 """
 
 
+from curses.ascii import CR
 from crisprme.crisprme_argsparser import CrisprmeArgumentParser 
 from crisprme.crisprme import (
-    __version__, complete_search, gnomAD_converter, targets_integration
+    __version__, 
+    complete_search, 
+    gnomAD_converter, 
+    targets_integration,
+    web_interface,
 )
 from crisprme.utils import (
     CURRENT_WORKING_DIRECTORY,
@@ -70,10 +75,13 @@ from crisprme.utils import (
     check_command_args,
     exception_handler, 
     parse_PAM_sequence_file,
-    parse_guide_sequences_file
+    parse_guide_sequences_file,
 )
 from crisprme.crisprme_commands import (
-    CompleteSearch, GnomADConverter, TargetsIntegration
+    CompleteSearch, 
+    GnomADConverter, 
+    TargetsIntegration, 
+    WebInterface,
 )
 
 from typing import List, Optional
@@ -346,6 +354,14 @@ def get_parser() -> CrisprmeArgumentParser:
         metavar="OUTDIR",
         dest="outdir",
         help="Output folder containing the final results."
+    )
+    group = parser.add_argument_group("web-interface options")
+    group.add_argument(
+        "--help-web",
+        action="store_true",
+        default=False,
+        dest="help_web",
+        help="Print help for CRISPRme interactive web page."
     )
     return parser
 
@@ -688,7 +704,7 @@ def gnomAD_converter_input_check(
 
 def targets_integration_input_check(
     args: Namespace, parser: CrisprmeArgumentParser
-) -> None:
+) -> TargetsIntegration:
     """Check arguments consistency for targets integration.
 
     ...
@@ -702,7 +718,7 @@ def targets_integration_input_check(
 
     Returns
     -------
-    None
+    TargetsIntegration
     """
 
     if not isinstance(args, Namespace):
@@ -743,6 +759,60 @@ def targets_integration_input_check(
     return targets_integration
 
 
+def web_interface_input_check(
+    args: Namespace, parser: CrisprmeArgumentParser
+) -> WebInterface:
+    """Check arguments consistency for web interface.
+
+    ...
+
+    Parameters
+    ----------
+    args : Namespace
+        web-interface input arguments
+    parser : CrisprmeArgumentParser
+        Parsed input arguments
+
+    Returns
+    -------
+    WebInterface
+    """
+
+    if not isinstance(args, Namespace):
+        exception_handler(
+            TypeError,
+            f"Expected {Namespace.__name__}, got {type(args).__name__}",
+            args.debug
+        )
+    if not isinstance(parser, CrisprmeArgumentParser):
+        exception_handler(
+            TypeError,
+            f"Expected {CrisprmeArgumentParser.__name__}, got {type(parser).__name__}",
+            args.debug
+        )
+    # # check if only targets-integration arguments have been given
+    if check_command_args(CRISPRme_COMMANDS[3], args):
+        # if found something, raise error
+        parser.error("Wrong arguments given to \"web-interface\" command") 
+    if args.help_web:
+        sys.stderr.write(
+            "\nTo use the web and GUI functionalities of CRISPRme launch "
+            "\"crisprme web-interface\" without any command line argument. "
+            "The command will start a local server that will be used to initialize "
+            "the web interface.\n"
+        )
+        sys.stderr.write(
+            "To use the web interface, open your web-browser and type 127.0.0.1:8080 "
+            "in the search bar to execute CRISPRme server locally. Otherwise, to "
+            "execute CRISPRme web interface on remote servers type in the search "
+            "bar <IP ADDRESS>:8080.\n\n"
+        )
+        sys.exit(1)  # halt execution -> nothing left to do
+    assert not args.help_web  # should always be false if we get here
+    web_interface = WebInterface(
+        args.threads, args.verbose, args.debug, args.help_web
+    )
+    return web_interface
 
 
 def main(cmdline_args: Optional[List[str]] = None) -> None:
@@ -817,6 +887,8 @@ def main(cmdline_args: Optional[List[str]] = None) -> None:
             workflow = gnomAD_converter_input_check(args, parser)
         elif crisprme_command == CRISPRme_COMMANDS[2]:  # targets-integration
             workflow = targets_integration_input_check(args, parser)
+        elif crisprme_command == CRISPRme_COMMANDS[3]:  # web-interface
+            workflow = web_interface_input_check(args, parser)
         if args.verbose:
             sys.stderr.write("Arguments parsing finished.") 
         # select the command to execute
@@ -826,6 +898,8 @@ def main(cmdline_args: Optional[List[str]] = None) -> None:
             gnomAD_converter(workflow)
         elif isinstance(workflow, TargetsIntegration):
             targets_integration(workflow)
+        elif isinstance(workflow, WebInterface):
+            web_interface(workflow)
         else:
             # uknown command given, however we should never go here
             exception_handler(
