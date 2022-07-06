@@ -119,7 +119,7 @@ def exception_handler(
     if debug:
         raise exception_type(f"\n\n{exception}")
     else:
-        sys.stderr.write(Fore.RED + f"\n\nERROR: {exception}" + Fore.RESET)
+        sys.stderr.write(Fore.RED + f"\n\nERROR: {exception}\n" + Fore.RESET)
         sys.exit(1)  # ERRCODE 1 --> Exception raised
 
 
@@ -624,10 +624,4 @@ def get_guides(
                     )
     assert bool(guides)  # check that at least one guide  has been found
     return guides  # return guides for when adding to app.py
-        
-
-
-      
-
-
-        
+               

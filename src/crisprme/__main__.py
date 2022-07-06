@@ -62,6 +62,7 @@ from crisprme.crisprme import (
     gnomAD_converter, 
     targets_integration,
     web_interface,
+    generate_personal_card,
 )
 from crisprme.utils import (
     CURRENT_WORKING_DIRECTORY,
@@ -992,7 +993,7 @@ def main(cmdline_args: Optional[List[str]] = None) -> None:
         elif isinstance(workflow, WebInterface):
             web_interface(workflow)
         elif isinstance(workflow, GeneratePersonalCard):
-            pass
+            generate_personal_card(workflow)
         else:
             # uknown command given, however we should never go here
             exception_handler(
@@ -1000,13 +1001,15 @@ def main(cmdline_args: Optional[List[str]] = None) -> None:
                 "Unknown CRISPRme command: unable to proceed.",
                 True  # safer to always fully trace this error
             )
+        stop = time()  # end of CRISPRme run
+        sys.stderr.write(f"Elapsed time %.2fs" % (stop - start))
     except KeyboardInterrupt:
         sigint_handler()
     finally:
         pass
 
 
-# entry point 
+# ---- CRISPRme entry point 
 if __name__ == "__main__":
     main()
 
