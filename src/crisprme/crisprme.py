@@ -2,7 +2,11 @@
 """
 
 from crisprme.crisprme_commands import (
-    CompleteSearch, GnomADConverter, TargetsIntegration, WebInterface
+    CompleteSearch, 
+    GnomADConverter, 
+    TargetsIntegration, 
+    WebInterface, 
+    GeneratePersonalCard,
 )
 from crisprme.utils import exception_handler
 
@@ -112,7 +116,7 @@ def web_interface(args: WebInterface) -> None:
     Parameters
     ----------
     args : WebInterface
-        TargetsIntegration input arguments
+        WebInterface input arguments
 
     Returns
     -------
@@ -129,5 +133,34 @@ def web_interface(args: WebInterface) -> None:
     sys.stderr.write("Starting CRISPRme web interface")
     try:
         print("Running crisprme web interface")
+    except:
+        pass
+
+
+def generate_personal_card(args: GeneratePersonalCard) -> None:
+    """Launch CRISPRme generate personal card command.
+
+    ...
+
+    Parameters
+    ----------
+    args : GeneratePersonalCard
+        GeneratePersonalCard input arguments
+
+    Returns
+    -------
+    None
+    """
+
+    if not isinstance(args, GeneratePersonalCard):
+        exception_handler(
+            TypeError,
+            f"Expected {GeneratePersonalCard.__name__}, got {type(args).__name__}",
+            args.debug
+        )
+    # job start message
+    sys.stderr.write("Starting CRISPRme generate personal card")
+    try:
+        print("Running crisprme generate-personal-card")
     except:
         pass

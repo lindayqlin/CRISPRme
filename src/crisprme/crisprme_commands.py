@@ -1,14 +1,14 @@
 """Commands classes definiton.
 
-TODO: complete docstring
+CRISPRme provides 5 commands:
+* complete-search
+* gnomAD-converter
+* targets-integration
+* web-interface
+* generate-personal-card
 
-CRISPRme provides ? commands:
-* 
-*
-*
-
-
-For each available command, we define the corresponding class.
+For each available command, we define the corresponding class. Each class stores
+the arguments required to run the corresponding CRISPRme functionality.
 """
 
 
@@ -305,14 +305,14 @@ class TargetsIntegration(CRISPRmeCommand):
         
 
 class WebInterface(CRISPRmeCommand):
-    """Targets integration command class. The class extends `CRISPRmeCommand` 
+    """Web interface command class. The class extends `CRISPRmeCommand` 
     class.
 
     ...
 
     Attributes
     ----------
-    help_web : bool
+    _help_web : bool
     
     Methods
     -----
@@ -330,3 +330,55 @@ class WebInterface(CRISPRmeCommand):
     @property
     def help_web(self):
         return self._get_help_web()
+
+
+class GeneratePersonalCard(CRISPRmeCommand):
+    """Generate personal card command class. The class extends `CRISPRmeCommand` 
+    class.
+
+    ...
+
+    Attributes
+    ----------
+    _inputdir : str
+    _guide_seq : str
+    _sample_id : str
+    
+    Methods
+    -----
+    """
+
+    def __init__(
+        self, 
+        threads: int, 
+        verbose: bool, 
+        debug: bool, 
+        inputdir: str, 
+        guide_seq: str,
+        sample_id: str
+    ) -> None:
+        super().__init__(threads, verbose, debug)
+        self._inputdir = inputdir
+        self._guide_seq = guide_seq
+        self._sample_id = sample_id
+
+    def _get_inputdir(self):
+        return self._inputdir
+
+    @property
+    def inputdir(self):
+        return self._get_inputdir()
+    
+    def _get_guide_seq(self):
+        return self._guide_seq
+
+    @property
+    def guide_seq(self):
+        return self._get_guide_seq()
+
+    def _get_sample_id(self):
+        return self._sample_id
+
+    @property
+    def sample_id(self):
+        return self._get_sample_id()

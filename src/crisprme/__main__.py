@@ -82,6 +82,7 @@ from crisprme.crisprme_commands import (
     GnomADConverter, 
     TargetsIntegration, 
     WebInterface,
+    GeneratePersonalCard,
 )
 
 from typing import List, Optional
@@ -355,6 +356,7 @@ def get_parser() -> CrisprmeArgumentParser:
         dest="outdir",
         help="Output folder containing the final results."
     )
+    # web-interface arguments
     group = parser.add_argument_group("web-interface options")
     group.add_argument(
         "--help-web",
@@ -362,6 +364,33 @@ def get_parser() -> CrisprmeArgumentParser:
         default=False,
         dest="help_web",
         help="Print help for CRISPRme interactive web page."
+    )
+    # generate-personal-card arguments
+    group = parser.add_argument_group("generate-personal-card")
+    group.add_argument(
+        "--inputdir",
+        type=str,
+        nargs="?",
+        default="",
+        metavar="INPUTDATA-DIR",
+        dest="inputdir",
+        help="Directory containing the data to use to compute personal cards."
+    )
+    group.add_argument(
+        "--guide-seq",
+        type=str,
+        default="",
+        metavar="GUIDE-SEQUENCE",
+        dest="guide_seq",
+        help="Guide sequence used while extracting targets."
+    )
+    group.add_argument(
+        "--sample-id",
+        type=str,
+        default="",
+        metavar="SAMPLEID",
+        dest="sample_id",
+        help="Sample ID."
     )
     return parser
 
@@ -790,7 +819,7 @@ def web_interface_input_check(
             f"Expected {CrisprmeArgumentParser.__name__}, got {type(parser).__name__}",
             args.debug
         )
-    # # check if only targets-integration arguments have been given
+    # check if only web-interface arguments have been given
     if check_command_args(CRISPRme_COMMANDS[3], args):
         # if found something, raise error
         parser.error("Wrong arguments given to \"web-interface\" command") 
@@ -813,6 +842,62 @@ def web_interface_input_check(
         args.threads, args.verbose, args.debug, args.help_web
     )
     return web_interface
+
+
+def generate_personal_card_input_check(
+    args: Namespace, parser: CrisprmeArgumentParser
+) -> GeneratePersonalCard:
+    """Check arguments consistency for generate personal card.
+
+    ...
+
+    Parameters
+    ----------
+    args : Namespace
+        generate-personal-card input arguments
+    parser : CrisprmeArgumentParser
+        Parsed input arguments
+
+    Returns
+    -------
+    GeneratePersonalCard
+    """
+
+    if not isinstance(args, Namespace):
+        exception_handler(
+            TypeError,
+            f"Expected {Namespace.__name__}, got {type(args).__name__}",
+            args.debug
+        )
+    if not isinstance(parser, CrisprmeArgumentParser):
+        exception_handler(
+            TypeError,
+            f"Expected {CrisprmeArgumentParser.__name__}, got {type(parser).__name__}",
+            args.debug
+        )
+    # check if only generate-personal-card arguments have been given
+    if check_command_args(CRISPRme_COMMANDS[4], args):
+        parser.error(
+            "Wrong arguments given to \"generate-personal-card\" command"
+        )
+    if not args.inputdir:
+        parser.error("Missing input directory.")
+    else:
+        inputdir = os.path.abspath(args.inputdir)
+        if not os.path.isfile(inputdir):
+            parser.error(f"Unable to locate {args.inputdir}")
+    if not args.guide_seq:
+        parser.error("Missing guide sequence.")
+    else:
+        guide_seq = args.guide_seq
+    if not args.sample_id:
+        parser.error("Missing sample ID.")
+    else:
+        sample_id = args.sample_id
+    generate_personal_card = GeneratePersonalCard(
+        args.threads, args.verbose, args.debug, inputdir, guide_seq, sample_id
+    )
+    return generate_personal_card
 
 
 def main(cmdline_args: Optional[List[str]] = None) -> None:
@@ -889,6 +974,12 @@ def main(cmdline_args: Optional[List[str]] = None) -> None:
             workflow = targets_integration_input_check(args, parser)
         elif crisprme_command == CRISPRme_COMMANDS[3]:  # web-interface
             workflow = web_interface_input_check(args, parser)
+        elif crisprme_command == CRISPRme_COMMANDS[4]:  # generate-personal-card
+            workflow = generate_personal_card_input_check(args, parser)
+        else:  # unknown command given
+            raise ValueError(
+                f"Unrecognized crisprme command ({crisprme_command})"
+            )
         if args.verbose:
             sys.stderr.write("Arguments parsing finished.") 
         # select the command to execute
@@ -900,6 +991,8 @@ def main(cmdline_args: Optional[List[str]] = None) -> None:
             targets_integration(workflow)
         elif isinstance(workflow, WebInterface):
             web_interface(workflow)
+        elif isinstance(workflow, GeneratePersonalCard):
+            pass
         else:
             # uknown command given, however we should never go here
             exception_handler(

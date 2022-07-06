@@ -213,6 +213,14 @@ def check_command_args(command: str, args: Namespace) -> bool:
         # make sure that only web-interface has such args initialized
         if args_dict["help_web"]:
             return True
+    if command != CRISPRme_COMMANDS[4]:  # generate-personal-card
+        # make sure that only generate-personal-card has such args initialized
+        if bool(args_dict["inputdir"]):
+            return True
+        if bool(args_dict["guide_seq"]):
+            return True
+        if bool(args_dict["sample_id"]):
+            return True
     return False
 
 
